@@ -211,3 +211,93 @@ class FUV_primary_headers(BaseModel):
         db_table = 'fuv_primary_headers'
 
 #-------------------------------------------------------------------------------
+
+class FUVA_raw_headers(BaseModel):
+    'Table of raw fuva data'
+
+    rootname = CharField(primary_key = True)
+    expstart = FloatField()
+    expend = FloatField()
+    rawtime = FloatField()
+    neventsa = FloatField()
+    deventa = FloatField()
+    feventa = FloatField()
+    hvlevela = IntegerField()
+
+    filename = ForeignKeyField(Files,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+    class Meta:
+        db_table = 'fuva_raw_headers'
+
+#-------------------------------------------------------------------------------
+
+class FUVB_raw_headers(BaseModel):
+    'Table of raw fuvb data'
+
+    rootname = CharField(primary_key = True)
+    expstart = FloatField()
+    expend = FloatField()
+    rawtime = FloatField()
+    neventsb = FloatField()
+    deventb = FloatField()
+    feventb = FloatField()
+    hvlevelb = IntegerField()
+
+    filename = ForeignKeyField(Files,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+    class Meta:
+        db_table = 'fuvb_raw_headers'
+
+#-------------------------------------------------------------------------------
+
+class FUVA_corr_headers(BaseModel):
+    'Table of corr fuva data'
+
+    rootname = CharField(primary_key = True)
+    shift1a = FloatField()
+    shift2a = FloatField()
+    sp_loc_a = FloatField()
+    sp_off_a = FloatField()
+    sp_err_a = FloatField()
+    sp_nom_a = FloatField()
+    sp_hgt_a = IntegerField()
+    exptime = FloatField()
+
+    filename = ForeignKeyField(Files,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+    class Meta:
+        db_table = 'fuva_corr_headers'
+
+#-------------------------------------------------------------------------------
+
+class FUVB_corr_headers(BaseModel):
+    'Table of corr fuvb data'
+
+    rootname = CharField(primary_key = True)
+    shift1b = FloatField()
+    shift2b = FloatField()
+    sp_loc_b = FloatField()
+    sp_off_b = FloatField()
+    sp_err_b = FloatField()
+    sp_nom_b = FloatField()
+    sp_hgt_b = IntegerField()
+    exptime = FloatField()
+
+    filename = ForeignKeyField(Files,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+    class Meta:
+        db_table = 'fuvb_corr_headers'
+
+#-------------------------------------------------------------------------------

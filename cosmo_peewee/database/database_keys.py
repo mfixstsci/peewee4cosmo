@@ -1,4 +1,5 @@
-
+import os
+from astropy.io import fits
 #-------------------------------------------------------------------------------
 
 def nuv_raw_keys(file_result):
@@ -111,3 +112,69 @@ def fuv_primary_keys(file_result):
     return keywords
     
 #-------------------------------------------------------------------------------
+
+def fuva_raw_keys(file_result):
+    file_path = os.path.join(file_result.path, file_result.filename)
+    with fits.open(file_path) as hdu:
+            keywords = {'filename': file_result.filename,
+                        'rootname': hdu[0].header['rootname'],
+                        'expstart': hdu[1].header['expstart'],
+                        'expend': hdu[1].header['expend'],
+                        'rawtime': hdu[1].header['rawtime'],
+                        'neventsa': hdu[1].header['neventsa'],
+                        'deventa': hdu[1].header['deventa'],
+                        'feventa': hdu[1].header['feventa'],
+                        'hvlevela': hdu[1].header['hvlevela']
+                        }
+    return keywords
+
+#-------------------------------------------------------------------------------
+
+def fuvb_raw_keys(file_result):
+    file_path = os.path.join(file_result.path, file_result.filename)
+    with fits.open(file_path) as hdu:
+            keywords = {'filename': file_result.filename,
+                        'rootname': hdu[0].header['rootname'],
+                        'expstart': hdu[1].header['expstart'],
+                        'expend': hdu[1].header['expend'],
+                        'rawtime': hdu[1].header['rawtime'],
+                        'neventsb': hdu[1].header['neventsb'],
+                        'deventb': hdu[1].header['deventb'],
+                        'feventb': hdu[1].header['feventb'],
+                        'hvlevelb': hdu[1].header['hvlevelb']
+                        }
+    return keywords
+
+#-------------------------------------------------------------------------------
+
+def fuva_corr_keys(file_result):
+    file_path = os.path.join(file_result.path, file_result.filename)
+    with fits.open(file_path) as hdu:
+            keywords = {'filename': file_result.filename,
+                        'rootname': hdu[0].header['rootname'],
+                        'shift1a': hdu[1].header['shift1a'],
+                        'shift2a': hdu[1].header['shift2a'],
+                        'sp_loc_a': hdu[1].header['sp_loc_a'],
+                        'sp_off_a': hdu[1].header['sp_off_a'],
+                        'sp_err_a': hdu[1].header.get('sp_err_a', -999.9),
+                        'sp_nom_a': hdu[1].header['sp_nom_a'],
+                        'sp_hgt_a': hdu[1].header['sp_hgt_a'],
+                        'exptime': hdu[1].header['exptime']
+                        }
+    return keywords
+#-------------------------------------------------------------------------------
+def fuvb_corr_keys(file_result):
+    file_path = os.path.join(file_result.path, file_result.filename)
+    with fits.open(file_path) as hdu:
+            keywords = {'filename': file_result.filename,
+                        'rootname': hdu[0].header['rootname'],
+                        'shift1b': hdu[1].header['shift1b'],
+                        'shift2b': hdu[1].header['shift2b'],
+                        'sp_loc_b': hdu[1].header['sp_loc_b'],
+                        'sp_off_b': hdu[1].header['sp_off_b'],
+                        'sp_err_b': hdu[1].header.get('sp_err_b', -999.9),
+                        'sp_nom_b': hdu[1].header['sp_nom_b'],
+                        'sp_hgt_b': hdu[1].header['sp_hgt_b'],
+                        'exptime': hdu[1].header['exptime']
+                        }
+    return keywords

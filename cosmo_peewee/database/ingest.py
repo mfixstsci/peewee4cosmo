@@ -12,12 +12,17 @@ import functools
 import multiprocessing as mp
 
 from .models import get_database, get_settings
-from .models import Files, NUV_raw_headers, NUV_corr_headers, FUV_primary_headers
-from .database_keys import nuv_raw_keys, nuv_corr_keys, fuv_primary_keys
+from .models import Files, NUV_raw_headers, NUV_corr_headers, FUV_primary_headers, FUVA_raw_headers, FUVB_raw_headers, FUVA_corr_headers, FUVB_corr_headers
+from .database_keys import nuv_raw_keys, nuv_corr_keys, fuv_primary_keys, fuva_raw_keys, fuvb_raw_keys, fuva_corr_keys, fuvb_corr_keys
 from ..filesystem import find_all_datasets
 
+from ..osm.monitor import pull_flashes
+from ..osm.monitor import monitor as osm_monitor
+
 #-------------------------------------------------------------------------------
+
 def bulk_insert(file_result, table, function):
+    
     """This function inserts the rows into the data base. We use the partials
     to add data quick using pool.map().
 
@@ -31,10 +36,15 @@ def bulk_insert(file_result, table, function):
         List of files you wish to extract metadata from.
     
     """
+    
     try:
         data = function(file_result)
         table.create(**data)
-    except IntegrityError:
+    except IntegrityError as e:
+        print(e)
+        print(os.path.join(file_result.path, file_result.filename))
+    except IOError as e:
+        print(e)
         print(os.path.join(file_result.path, file_result.filename))
 
 #-------------------------------------------------------------------------------
@@ -127,9 +137,9 @@ def populate_files(settings):
         try:
             fits.open(full_filepath)
         except IOError:
-            
             monitor_flag = False
 
+        #-- There are some fishy files in the filesystem we need to fish out, here is way to expose them.
         try:
             #-- Insert metadata
             Files.insert(path=path,
@@ -143,8 +153,10 @@ def populate_files(settings):
 
 #-------------------------------------------------------------------------------
 
-def populate_table(table, table_keys, search_str, num_cpu=2):
+def populate_tables(table, table_keys, search_str, num_cpu=2):
 
+    #-- Setting up logging
+    setup_logging()
     
     #-- Connect to DB
     database = get_database()
@@ -197,6 +209,9 @@ def populate_table(table, table_keys, search_str, num_cpu=2):
                                 (Files.monitor_flag == True)
                             ))
     
+    #-- Show the user how many files are being added to the DB tables.
+    #logger.info('ADDING {} FILES TO {}'.format(files_to_add.count(), table._meta.db_table))
+    
     #-- set up partials
     partial = functools.partial(bulk_insert,
                                 table=table,
@@ -208,6 +223,29 @@ def populate_table(table, table_keys, search_str, num_cpu=2):
     
     database.close()
 
+#-------------------------------------------------------------------------------
+def populate_osm(**kwargs):
+    
+    database = get_database()
+    database.connect()
+
+    files_to_add = (Files.select()
+                            .where(
+                                (Files.filename.contains('%lampflash%') | Files.filename.contains('%_rawacq%')) & 
+                                Files.filename.not_in(table.select(table.filename)) &
+                                (Files.monitor_flag == True)
+                            ))
+
+    '''
+    partial = functools.partial(bulk_insert,
+                                table=table,
+                                function=function)
+    
+    #-- pool up the partials and pass it the iterable (files)
+    pool = mp.Pool(processes=num_cpu)
+    pool.map(partial, files_to_add)
+    '''
+    database.close()
 #-------------------------------------------------------------------------------
 
 def ingest_all():
@@ -224,7 +262,11 @@ def ingest_all():
     tables = [Files,
               NUV_raw_headers,
               NUV_corr_headers,
-              FUV_primary_headers]
+              FUV_primary_headers, 
+              FUVA_raw_headers, 
+              FUVB_raw_headers,
+              FUVA_corr_headers, 
+              FUVB_corr_headers]
 
 
     #-- Safe checks existance of tables first to make sure they dont get clobbered.
@@ -239,17 +281,29 @@ def ingest_all():
 
     #-- NUV rawtag headers    
     logger.info("Populating NUV rawtag headers.")
-    populate_table(NUV_raw_headers, nuv_raw_keys, '%_rawtag.fits.gz%', settings['num_cpu'])
+    populate_tables(NUV_raw_headers, nuv_raw_keys, '%_rawtag.fits.gz%', settings['num_cpu'])
 
     #-- NUV corrtag headers    
     logger.info("Populating NUV corrtag headers.")
-    populate_table(NUV_corr_headers, nuv_corr_keys, '%_corrtag.fits.gz%', settings['num_cpu'])
+    populate_tables(NUV_corr_headers, nuv_corr_keys, '%_corrtag.fits.gz%', settings['num_cpu'])
 
     #-- FUV primary headers    
     logger.info("Populating FUV primary headers.")
-    populate_table(FUV_primary_headers, fuv_primary_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
-    populate_table(FUV_primary_headers, fuv_primary_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
+    populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
+    populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
+    #-- FUV rawtag headers    
+    logger.info("Populating FUV rawtag headers.")
+    populate_tables(FUVA_raw_headers, fuva_raw_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
+    populate_tables(FUVB_raw_headers, fuvb_raw_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
+    #-- FUV corrtag headers    
+    logger.info("Populating FUV corrtag headers.")
+    populate_tables(FUVA_corr_headers, fuva_corr_keys, '%corrtag_a.fits.gz%', settings['num_cpu'])
+    populate_tables(FUVB_corr_headers, fuvb_corr_keys, '%corrtag_b.fits.gz%', settings['num_cpu'])
+
+    #-- Populate OSM monitor meta
+    logger.info("Populating OSM Shift Table")
+    populate_osm(OSM_shift, pull_flashes, settings['num_cpu'])
 #-------------------------------------------------------------------------------
 
