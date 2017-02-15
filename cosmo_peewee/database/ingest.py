@@ -143,27 +143,6 @@ def populate_files(settings):
 
 #-------------------------------------------------------------------------------
 
-def populate_nuv_raw(num_cpu=2):
-    
-    database = get_database()
-    database.connect()
-
-    files_to_add = (Files.select()
-                         .where(
-                             Files.filename.contains('%_rawtag.fits%') & 
-                             Files.filename.not_in(NUV_raw_headers.select(NUV_raw_headers.filename)) &
-                             (Files.monitor_flag == True)
-                         ))
-    
-    for file_result in files_to_add:
-        data = nuv_raw_keys(file_result)
-        NUV_raw_headers.create(**data)
-    
-    database.close()
-
-
-#-------------------------------------------------------------------------------
-
 def populate_table(table, table_keys, search_str, num_cpu=2):
 
     
