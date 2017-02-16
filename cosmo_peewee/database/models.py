@@ -301,3 +301,60 @@ class FUVB_corr_headers(BaseModel):
         db_table = 'fuvb_corr_headers'
 
 #-------------------------------------------------------------------------------
+
+class Lampflash(BaseModel):
+
+    """Preped metadata for OSM monitor."""
+    rootname = CharField(primary_key=True)
+    date = FloatField()
+    proposid = IntegerField()
+    detector = CharField()
+    segment = CharField()
+    opt_elem = CharField()
+    cenwave = IntegerField()
+    fppos = IntegerField()
+    lamptab = CharField()
+    flash = IntegerField()
+    x_shift = FloatField()
+    y_shift = FloatField()
+    filetype = CharField()
+    cal_date = CharField()
+    found = BooleanField()
+    
+    filename = ForeignKeyField(Files,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+    
+    class Meta:
+        db_table = 'lampflash'
+
+#-------------------------------------------------------------------------------
+
+class Rawacqs(BaseModel):
+
+    """Preped metadata for OSM monitor."""
+    
+    rootname = CharField(primary_key=True)
+    date = FloatField()
+    proposid = IntegerField()
+    detector = CharField()
+    opt_elem = CharField()
+    cenwave = IntegerField()
+    fppos = IntegerField()
+    flash = IntegerField()
+    x_shift = FloatField()
+    y_shift = FloatField()
+    filetype = CharField()
+    cal_date = CharField()
+    found = BooleanField()
+    
+    filename = ForeignKeyField(Files,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+    
+    class Meta:
+        db_table = 'rawacqs'

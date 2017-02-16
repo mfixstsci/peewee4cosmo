@@ -16,7 +16,8 @@ setup(
                    'Topic :: Software Development :: Libraries :: Python Modules'],
     packages = find_packages(),
     requires = ['numpy', 'scipy', 'astropy', 'matplotlib'],
-    entry_points = {'console_scripts': ['cm_ingest=cosmo_peewee.database:ingest_all'
+    entry_points = {'console_scripts': ['cm_ingest=cosmo_peewee.database:ingest_all',
+                                        'cm_monitors=cosmo_peewee.database:run_monitors'
                                         ],
     },
     install_requires = ['setuptools',

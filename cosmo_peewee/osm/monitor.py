@@ -24,12 +24,29 @@ from datetime import datetime
 from astropy.io import fits
 from astropy.table import Table
 
-from ..database.db_tables import open_settings, load_connection
+from ..database.models import get_database, get_settings
+from ..database.models import Lampflash, Rawacqs
 from ..utils import remove_if_there
 
 #-------------------------------------------------------------------------------
 
 def fppos_shift(lamptab_name, segment, opt_elem, cenwave, fpoffset):
+    """Get the COS FPPOS pixel shift.
+    
+    Parameters
+    ----------
+    lamptab_name : str
+        name of lamptab reference file.
+    segment : str
+        detector segment.
+    opt_elem : str
+        grating
+    cenwave : str
+        central wavelength
+    fpoffset : int
+        calculated offset from home position.
+    """
+
     lamptab = fits.getdata(os.path.join(os.environ['lref'], lamptab_name))
 
     if 'FPOFFSET' not in lamptab.names:
@@ -61,8 +78,11 @@ def pull_flashes(filename):
 
     """
 
-    with fits.open(filename) as hdu:
-        out_info = {'filename': filename,
+    #-- Open file
+    file_path = os.path.join(filename.path, filename.filename)
+    with fits.open(file_path) as hdu:
+        #-- Set some dictionary values.
+        out_info = {'filename': filename.filename,
                     'date': hdu[1].header['EXPSTART'],
                     'rootname': hdu[0].header['ROOTNAME'],
                     'proposid': hdu[0].header['PROPOSID'],
@@ -73,24 +93,32 @@ def pull_flashes(filename):
                     'fppos': hdu[0].header.get('FPPOS', None),
                     'filetype': hdu[0].header.get('FILETYPE', None)}
 
+        #-- Get time, and then convert the format
         t = Time(out_info['date'], format='mjd')
         out_info['cal_date'] = t.iso
 
-        if '_lampflash.fits' in filename:
+        #-- Open lampflash
+        if '_lampflash.fits' in filename.filename:
+            
+            #-- Get lamptab file
             out_info['lamptab'] = hdu[0].header['LAMPTAB'].split('$')[-1]
 
+            #-- FPPOS 3 is the home frame, so put all FP's in home frame.
             fpoffset = out_info['fppos'] - 3
 
             if not len(hdu[1].data):
-                yield out_info
+                #yield out_info
+                return out_info
             else:
                 for i, line in enumerate(hdu[1].data):
+                    
+                    #-- Count the number of flashes and set dictionary values.
                     out_info['flash'] = (i // 2) + 1
                     out_info['x_shift'] = line['SHIFT_DISP'] - fppos_shift(out_info['lamptab'],
-                                                                           line['segment'],
-                                                                           out_info['opt_elem'],
-                                                                           out_info['cenwave'],
-                                                                           fpoffset)
+                                                                            line['segment'],
+                                                                            out_info['opt_elem'],
+                                                                            out_info['cenwave'],
+                                                                            fpoffset)
 
                     out_info['y_shift'] = line['SHIFT_XDISP']
                     out_info['found'] = line['SPEC_FOUND']
@@ -100,18 +128,19 @@ def pull_flashes(filename):
                     out_info['x_shift'] = round(out_info['x_shift'], 5)
                     out_info['y_shift'] = round(out_info['y_shift'], 5)
 
-                    yield out_info
-
-
-        elif '_rawacq.fits' in filename:
+                    #yield out_info
+                    return out_info
+        
+        #-- Open rawacqs
+        elif '_rawacq.fits' in filename.filename:
             #-- Technically it wasn't found.
             out_info['found'] = False
             out_info['fppos'] = -1
             out_info['flash'] = 1
-            out_info['segment'] = 'N/A'
 
-            spt = fits.open(filename.replace('rawacq', 'spt'))
-
+            #-- Grab associated spt
+            spt = fits.open(os.path.join(filename.path,filename.filename.replace('rawacq', 'spt')))
+            
             if not spt[1].header['LQTAYCOR'] > 0:
                 out_info['x_shift'] = -999
                 out_info['y_shift'] = -999
@@ -121,47 +150,96 @@ def pull_flashes(filename):
                 out_info['x_shift'] = 1023 - spt[1].header['LQTAYCOR']
                 out_info['y_shift'] = 1023 - spt[1].header['LQTAXCOR']
 
-            yield out_info
-
+            return out_info
         else:
-            yield out_info
+            return out_info
 
 #-------------------------------------------------------------------------------
 
 def fit_data(xdata, ydata):
+    """ Fit a regression line to shift data points
+
+    Parameters
+    ----------
+    xdata : astropy.table.column.Column
+        A list of x values (time)
+    ydata : astropy.table.column.Column
+        A list of y values (shifts)
+
+    Returns
+    -------
+    fit : ndarray
+        The fit line
+    xdata : astropy.table.column.Column
+        List of x values for fit
+    parameters : tuple
+        fitting parameters
+    err : int
+        Value returned on whether the fit was a sucess.
+    """
     stats = linregress(xdata, ydata)
 
     parameters = (stats[0], stats[1])
     err = 0
     fit = scipy.polyval(parameters, xdata)
 
+    print(type(fit),type(xdata),type(parameters),type(err))
     return fit, xdata, parameters, err
 
 #-------------------------------------------------------------------------------
 
-def make_shift_table(connection_string):
+def make_shift_table(db_table):
+    """ Make an astropy table of shift values and other metadata
+    
+    Parameters
+    ----------
+    db_table : peewee table object
+        The Lampflash or Rawacq table
+    
+    Returns
+    -------
+    data : Astropy table
+        All data needed for plotting obtained from database.
+    
+    """
+    database = get_database()
+    database.connect()
 
-    Session, engine = load_connection(connection_string)
+    data = []
 
     #-- this is a crude implementation, but it lets me use the rest of the
     #-- plotting code as-is
-    data = []
-    for i, row in enumerate(engine.execute("""SELECT * FROM lampflash
-                                                       WHERE x_shift IS NOT NULL AND
-                                                            y_shift IS NOT NULL;""")):
-        if not i:
-            keys = row.keys()
+
+    #-- .dicts() returns the result objects as dictionaries. 
+    for i, row in enumerate(db_table.select().dicts()):
         data.append(row.values())
+        if not i:
+            #-- get keys here because if you use ._meta.fields.keys() 
+            #-- they will be out of order.
+            keys = row.keys()    
+    
+    database.close()
 
     data = Table(rows=data, names=keys)
-
     return data
 
 #-------------------------------------------------------------------------------
 
-def make_plots(data, out_dir):
+def make_plots(data, data_acqs, out_dir):
+    """Make plots for OSM shifts  
+    
+    Parameter
+    ---------
+    data : Astropy Table
+        A table of lampflash metadata
+    data_acqs : Astropy Table
+        A table of rawacqs metadata
+    out_dir : str
+        The output directory for the files.
+    """
+    
     mpl.rcParams['figure.subplot.hspace'] = 0.05
-
+    
     sorted_index = np.argsort(data['date'])
     data = data[sorted_index]
 
@@ -245,12 +323,12 @@ def make_plots(data, out_dir):
 
     for axis,index in zip([ax,ax2,ax3],[G130M,G160M,G140L]):
         #axis.set_ylim(-300,300)
-        axis.set_xlim( data['date'].min(),data['date'].max()+50 )
+        axis.set_xlim(data['date'].min(),data['date'].max()+50 )
         axis.set_ylabel('SHIFT1[A/B/C] (pixels)')
         axis.axhline(y=0,color='r')
         axis.axhline(y=285,color='k',lw=3,ls='--',zorder=1,label='Search Range')
         axis.axhline(y=-285,color='k',lw=3,ls='--',zorder=1)
-        fit,ydata,parameters,err = fit_data( data['date'][index],data['x_shift'][index] )
+        fit,ydata,parameters,err = fit_data(data['date'][index],data['x_shift'][index])
         axis.plot( ydata,fit,'k-',lw=3,label='%3.5fx'%(parameters[0]) )
         axis.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1, numpoints=1,shadow=True,prop={'size':10})
 
@@ -372,29 +450,29 @@ def make_plots(data, out_dir):
     ax.xaxis.set_ticklabels(['' for item in ax.xaxis.get_ticklabels()])
     ax.set_xlim(data['date'].min(), data['date'].max() + 50)
     #ax.set_ylim(-110, 110)
-
-    mirrora = np.where((data['opt_elem'] == 'MIRRORA')
-                       & (data['x_shift'] > 0))[0]
+    
+    mirrora = np.where((data_acqs['opt_elem'] == 'MIRRORA')
+                       & (data_acqs['x_shift'] > 0))[0]
     ax = fig.add_subplot(7, 1, 6)
-    ax.plot(data['date'][mirrora], data['x_shift'][mirrora], '.')
+    ax.plot(data_acqs['date'][mirrora], data_acqs['x_shift'][mirrora], '.')
     fit, ydata, parameters, err = fit_data(
-        data['date'][mirrora], data['x_shift'][mirrora])
+        data_acqs['date'][mirrora], data_acqs['x_shift'][mirrora])
     ax.plot(ydata, fit, 'k-', lw=3, label='%3.5fx' % (parameters[0]))
     ax.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1,numpoints=1, shadow=True)
-    ax.set_xlim(data['date'].min(), data['date'].max() + 50)
+    ax.set_xlim(data_acqs['date'].min(), data_acqs['date'].max() + 50)
     ax.set_ylabel('MIRRORA')
     ax.set_xlabel('date')
     #ax.set_ylim(460, 630)
 
-    mirrorb = np.where((data['opt_elem'] == 'MIRRORB')
-                       & (data['x_shift'] > 0))[0]
+    mirrorb = np.where((data_acqs['opt_elem'] == 'MIRRORB')
+                       & (data_acqs['x_shift'] > 0))[0]
     ax = fig.add_subplot(7, 1, 7)
-    ax.plot(data['date'][mirrorb], data['x_shift'][mirrorb], '.')
+    ax.plot(data_acqs['date'][mirrorb], data_acqs['x_shift'][mirrorb], '.')
     fit, ydata, parameters, err = fit_data(
-        data['date'][mirrorb], data['x_shift'][mirrorb])
+        data_acqs['date'][mirrorb], data_acqs['x_shift'][mirrorb])
     ax.plot(ydata, fit, 'k-', lw=3, label='%3.5fx' % (parameters[0]))
     ax.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1,numpoints=1, shadow=True)
-    ax.set_xlim(data['date'].min(), data['date'].max() + 50)
+    ax.set_xlim(data_acqs['date'].min(), data_acqs['date'].max() + 50)
     ax.set_ylabel('MIRRORB')
     ax.set_xlabel('date')
     #ax.set_ylim(260, 400)
@@ -409,17 +487,17 @@ def make_plots(data, out_dir):
     ##############
 
     for elem in ['MIRRORA', 'MIRRORB']:
-        mirror = np.where((data['opt_elem'] == elem)
-                          & (data['x_shift'] > 0))[0]
+        mirror = np.where((data_acqs['opt_elem'] == elem)
+                          & (data_acqs['x_shift'] > 0))[0]
         fig = plt.figure(figsize=(8, 4))
         ax = fig.add_subplot(1, 1, 1)
-        ax.plot(data['date'][mirror], data['x_shift'][mirror], '.')
-        fit, ydata, parameters, err = fit_data(data['date'][mirror],
-                                               data['x_shift'][mirror])
+        ax.plot(data_acqs['date'][mirror], data_acqs['x_shift'][mirror], '.')
+        fit, ydata, parameters, err = fit_data(data_acqs['date'][mirror],
+                                               data_acqs['x_shift'][mirror])
         ax.plot(ydata, fit, 'r-', lw=3, label='%3.5f +/- %3.5f' %
                 (parameters[0], err))
         ax.legend(numpoints=1, shadow=True, loc='upper left')
-        ax.set_xlim(data['date'].min(), data['date'].max() + 50)
+        ax.set_xlim(data_acqs['date'].min(), data_acqs['date'].max() + 50)
         #ax.set_ylim(460, 630)
         remove_if_there(os.path.join(out_dir, '{}_shifts.png'.format(elem.upper())))
         fig.savefig(os.path.join(out_dir, '{}_shifts.png'.format(elem.upper())))
@@ -472,7 +550,7 @@ def make_plots(data, out_dir):
 
 #----------------------------------------------------------
 
-def make_plots_2(data, out_dir):
+def make_plots_2(data, data_acqs, out_dir):
     """ Making the plots for the shift2 value
     """
 
@@ -603,19 +681,25 @@ def monitor():
 
     logger.info("starting monitor")
 
-    settings = open_settings()
+    #webpage_dir = os.path.join(settings['webpage_location'], 'shifts')
+    #monitor_dir = os.path.join(settings['monitor_location'], 'Shifts')
 
-    webpage_dir = os.path.join(settings['webpage_location'], 'shifts')
-    monitor_dir = os.path.join(settings['monitor_location'], 'Shifts')
+    webpage_dir = os.path.join('/user/mfix/', 'webpage_test')
+    monitor_dir = os.path.join('/user/mfix/', 'monitor_test')
 
     for place in [webpage_dir, monitor_dir]:
         if not os.path.exists(place):
             logger.debug("creating monitor location: {}".format(place))
             os.makedirs(place)
 
-    flash_data = make_shift_table(settings['connection_string'])
-    make_plots(flash_data, monitor_dir)
-    make_plots_2(flash_data, monitor_dir)
+    flash_data = make_shift_table(Lampflash)
+    rawacq_data = make_shift_table(Rawacqs)
+    
+    make_plots(flash_data, rawacq_data, monitor_dir)
+    
+    '''
+    make_plots_2(flash_data, rawacq_data, monitor_dir)
+    
     #fp_diff(flash_data)
 
     for item in glob.glob(os.path.join(monitor_dir, '*.p??')):
@@ -623,6 +707,7 @@ def monitor():
         shutil.copy(item, webpage_dir)
 
     logger.info("finish monitor")
+    '''
 
 #----------------------------------------------------------
 '''

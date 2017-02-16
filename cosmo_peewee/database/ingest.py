@@ -12,7 +12,7 @@ import functools
 import multiprocessing as mp
 
 from .models import get_database, get_settings
-from .models import Files, NUV_raw_headers, NUV_corr_headers, FUV_primary_headers, FUVA_raw_headers, FUVB_raw_headers, FUVA_corr_headers, FUVB_corr_headers
+from .models import Files, NUV_raw_headers, NUV_corr_headers, FUV_primary_headers, FUVA_raw_headers, FUVB_raw_headers, FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs
 from .database_keys import nuv_raw_keys, nuv_corr_keys, fuv_primary_keys, fuva_raw_keys, fuvb_raw_keys, fuva_corr_keys, fuvb_corr_keys
 from ..filesystem import find_all_datasets
 
@@ -36,15 +36,14 @@ def bulk_insert(file_result, table, function):
         List of files you wish to extract metadata from.
     
     """
-    
     try:
         data = function(file_result)
         table.create(**data)
     except IntegrityError as e:
-        print(e)
+        print('IntegrityError:', e)
         print(os.path.join(file_result.path, file_result.filename))
     except IOError as e:
-        print(e)
+        print('IOError:',  e)
         print(os.path.join(file_result.path, file_result.filename))
 
 #-------------------------------------------------------------------------------
@@ -224,32 +223,55 @@ def populate_tables(table, table_keys, search_str, num_cpu=2):
     database.close()
 
 #-------------------------------------------------------------------------------
-def populate_osm(**kwargs):
-    
+def populate_osm(num_cpu=2):
+    """ Populate the OSM table"""
     database = get_database()
     database.connect()
 
     files_to_add = (Files.select()
                             .where(
-                                (Files.filename.contains('%lampflash%') | Files.filename.contains('%_rawacq%')) & 
-                                Files.filename.not_in(table.select(table.filename)) &
+                                Files.filename.contains('%lampflash%.gz') & 
+                                Files.filename.not_in(Lampflash.select(Lampflash.filename)) &
                                 (Files.monitor_flag == True)
                             ))
 
-    '''
     partial = functools.partial(bulk_insert,
-                                table=table,
-                                function=function)
+                                table=Lampflash,
+                                function=pull_flashes)
     
     #-- pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=num_cpu)
     pool.map(partial, files_to_add)
-    '''
+    
+    database.close()
+
+#-------------------------------------------------------------------------------
+def populate_acqs(num_cpu=2):
+    """ Populate the rawacqs table"""
+    database = get_database()
+    database.connect()
+
+    files_to_add = (Files.select()
+                            .where(
+                                Files.filename.contains('%rawacq%.gz') & 
+                                Files.filename.not_in(Rawacqs.select(Rawacqs.filename)) &
+                                (Files.monitor_flag == True)
+                            ))
+
+    partial = functools.partial(bulk_insert,
+                                table=Rawacqs,
+                                function=pull_flashes)
+    
+    #-- pool up the partials and pass it the iterable (files)
+    pool = mp.Pool(processes=num_cpu)
+    pool.map(partial, files_to_add)
+    
     database.close()
 #-------------------------------------------------------------------------------
 
 def ingest_all():
     """Create tables and run all ingestion scripts"""
+    
     setup_logging()
     #-- Get settings for functions
     settings = get_settings()
@@ -266,7 +288,9 @@ def ingest_all():
               FUVA_raw_headers, 
               FUVB_raw_headers,
               FUVA_corr_headers, 
-              FUVB_corr_headers]
+              FUVB_corr_headers,
+              Lampflash,
+              Rawacqs]
 
 
     #-- Safe checks existance of tables first to make sure they dont get clobbered.
@@ -302,8 +326,18 @@ def ingest_all():
     populate_tables(FUVA_corr_headers, fuva_corr_keys, '%corrtag_a.fits.gz%', settings['num_cpu'])
     populate_tables(FUVB_corr_headers, fuvb_corr_keys, '%corrtag_b.fits.gz%', settings['num_cpu'])
 
-    #-- Populate OSM monitor meta
+    #-- Populate OSM monitor metadata
     logger.info("Populating OSM Shift Table")
-    populate_osm(OSM_shift, pull_flashes, settings['num_cpu'])
+    populate_osm(settings['num_cpu'])
+
+    #-- Populate rawacq monitor meta
+    logger.info("Populating Rawacqs Table")
+    populate_acqs(settings['num_cpu'])
+
 #-------------------------------------------------------------------------------
 
+def run_monitors():
+    """ Run all COS Monitors"""
+    osm_monitor()
+
+#-------------------------------------------------------------------------------
