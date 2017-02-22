@@ -108,7 +108,7 @@ def pull_flashes(filename):
 
             if not len(hdu[1].data):
                 #yield out_info
-                return out_info
+                yield out_info
             else:
                 for i, line in enumerate(hdu[1].data):
                     
@@ -129,7 +129,7 @@ def pull_flashes(filename):
                     out_info['y_shift'] = round(out_info['y_shift'], 5)
 
                     #yield out_info
-                    return out_info
+                    yield out_info
         
         #-- Open rawacqs
         elif '_rawacq.fits' in filename.filename:
@@ -150,9 +150,9 @@ def pull_flashes(filename):
                 out_info['x_shift'] = 1023 - spt[1].header['LQTAYCOR']
                 out_info['y_shift'] = 1023 - spt[1].header['LQTAXCOR']
 
-            return out_info
+            yield out_info
         else:
-            return out_info
+            yield out_info
 
 #-------------------------------------------------------------------------------
 
@@ -183,7 +183,6 @@ def fit_data(xdata, ydata):
     err = 0
     fit = scipy.polyval(parameters, xdata)
 
-    print(type(fit),type(xdata),type(parameters),type(err))
     return fit, xdata, parameters, err
 
 #-------------------------------------------------------------------------------
@@ -556,28 +555,6 @@ def make_plots_2(data, data_acqs, out_dir):
 
     sorted_index = np.argsort(data['date'])
     data = data[sorted_index]
-    '''
-    for cenwave in set(data['cenwave']):
-        cw_index = np.where(data['cenwave'] == cenwave)
-        all_segments = set(data[cw_index]['segment'])
-        n_seg = len(all_segments)
-
-        fig = plt.figure()
-        fig.suptitle('Shift2/{}'.format(cenwave))
-
-        for i, segment in enumerate(all_segments):
-            print cenwave, segment
-            index = np.where( (data['segment'] == segment) &
-                              (data['cenwave'] == cenwave) )
-
-            ax = fig.add_subplot(n_seg, 1, i+1)
-            ax.plot(data[index]['date'], data[index]['y_shift'], 'o')
-            ax.set_xlabel('date')
-            ax.set_ylabel('SHIFT2 {}'.format(segment))
-
-        fig.savefig(os.path.join(out_dir, 'shift2_{}.png'.format(cenwave)))
-        plt.close(fig)
-    '''
 
     for cenwave in set(data['cenwave']):
         cw_index = np.where(data['cenwave'] == cenwave)
@@ -661,18 +638,6 @@ def fp_diff(data):
         plt.close()
         os.chmod(os.path.join(out_dir, 'difference_%s.pdf' % (cenwave)), 0o766)
 
-    # for cenwave in diff_dict:
-    #    all_diff = diff_dict[cenwave]
-    #    print all_diff
-    #    if not len(all_diff): continue
-    #    plt.plot(all_diff,bins=100)
-    #    plt.ylabel('Frequency (counts)')
-    #    plt.xlabel('SHIFT1A difference (pixels)')
-    #    plt.title(cenwave)
-    #    plt.savefig('plot_%s.pdf'%(cenwave) )
-
-        # plt.clf()
-
 #----------------------------------------------------------
 
 def monitor():
@@ -681,11 +646,10 @@ def monitor():
 
     logger.info("starting monitor")
 
-    #webpage_dir = os.path.join(settings['webpage_location'], 'shifts')
-    #monitor_dir = os.path.join(settings['monitor_location'], 'Shifts')
+    settings = get_settings()
 
-    webpage_dir = os.path.join('/user/mfix/', 'webpage_test')
-    monitor_dir = os.path.join('/user/mfix/', 'monitor_test')
+    webpage_dir = os.path.join(settings['webpage_location'], 'shifts')
+    monitor_dir = os.path.join(settings['monitor_location'], 'Shifts')
 
     for place in [webpage_dir, monitor_dir]:
         if not os.path.exists(place):
@@ -697,8 +661,7 @@ def monitor():
     
     make_plots(flash_data, rawacq_data, monitor_dir)
     
-    '''
-    make_plots_2(flash_data, rawacq_data, monitor_dir)
+    #make_plots_2(flash_data, rawacq_data, monitor_dir)
     
     #fp_diff(flash_data)
 
@@ -707,20 +670,5 @@ def monitor():
         shutil.copy(item, webpage_dir)
 
     logger.info("finish monitor")
-    '''
 
 #----------------------------------------------------------
-'''
-def make_shift_table(files):
-    data = []
-    for filename in files:
-        for flash in pull_flashes(filename):
-            if not []:
-                keys = flash.keys()
-            data.append(flash)
-            print(flash)
-
-    data = Table(rows=data, names=keys)
-
-    return data
-'''

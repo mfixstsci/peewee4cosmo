@@ -78,11 +78,22 @@ class Files(BaseModel):
     """Main files table"""
     path = CharField()
     filename = CharField(primary_key=True)
-    rootname = CharField()
     monitor_flag = BooleanField()
 
     class Meta:
-        db_table = 'files'    
+        db_table = 'files'   
+
+#-------------------------------------------------------------------------------
+
+class Observations(BaseModel):
+    """Observations table"""
+    path = CharField()
+    filename = CharField(primary_key=True)
+    targname = CharField()
+    
+    class Meta:
+        db_table = 'observations'  
+
 #-------------------------------------------------------------------------------
 
 class NUV_raw_headers(BaseModel):
@@ -123,7 +134,7 @@ class NUV_raw_headers(BaseModel):
     exptime = FloatField()
     nevents = IntegerField()
 
-    filename = ForeignKeyField(Files,
+    filename = ForeignKeyField(Observations,
                                db_column='filename',
                                default=None,
                                to_field="filename",
@@ -158,7 +169,7 @@ class NUV_corr_headers(BaseModel):
     sp_hgt_c = FloatField()
     exptime = FloatField()
 
-    filename = ForeignKeyField(Files,
+    filename = ForeignKeyField(Observations,
                                db_column='filename',
                                default=None,
                                to_field="filename",
@@ -202,7 +213,7 @@ class FUV_primary_headers(BaseModel):
     asn_id = CharField()
     asn_mtyp = CharField()
 
-    filename = ForeignKeyField(Files,
+    filename = ForeignKeyField(Observations,
                                db_column='filename',
                                default=None,
                                to_field="filename",
@@ -224,7 +235,7 @@ class FUVA_raw_headers(BaseModel):
     feventa = FloatField()
     hvlevela = IntegerField()
 
-    filename = ForeignKeyField(Files,
+    filename = ForeignKeyField(Observations,
                                db_column='filename',
                                default=None,
                                to_field="filename",
@@ -246,7 +257,7 @@ class FUVB_raw_headers(BaseModel):
     feventb = FloatField()
     hvlevelb = IntegerField()
 
-    filename = ForeignKeyField(Files,
+    filename = ForeignKeyField(Observations,
                                db_column='filename',
                                default=None,
                                to_field="filename",
@@ -269,7 +280,7 @@ class FUVA_corr_headers(BaseModel):
     sp_hgt_a = IntegerField()
     exptime = FloatField()
 
-    filename = ForeignKeyField(Files,
+    filename = ForeignKeyField(Observations,
                                db_column='filename',
                                default=None,
                                to_field="filename",
@@ -292,7 +303,7 @@ class FUVB_corr_headers(BaseModel):
     sp_hgt_b = IntegerField()
     exptime = FloatField()
 
-    filename = ForeignKeyField(Files,
+    filename = ForeignKeyField(Observations,
                                db_column='filename',
                                default=None,
                                to_field="filename",
@@ -305,7 +316,8 @@ class FUVB_corr_headers(BaseModel):
 class Lampflash(BaseModel):
 
     """Preped metadata for OSM monitor."""
-    rootname = CharField(primary_key=True)
+
+    rootname = CharField()
     date = FloatField()
     proposid = IntegerField()
     detector = CharField()
@@ -321,7 +333,7 @@ class Lampflash(BaseModel):
     cal_date = CharField()
     found = BooleanField()
     
-    filename = ForeignKeyField(Files,
+    filename = ForeignKeyField(Observations,
                                db_column='filename',
                                default=None,
                                to_field="filename",
@@ -329,14 +341,15 @@ class Lampflash(BaseModel):
     
     class Meta:
         db_table = 'lampflash'
-
+        #primary_key = CompositeKey('filename', 'flash', 'segment')
 #-------------------------------------------------------------------------------
 
 class Rawacqs(BaseModel):
 
     """Preped metadata for OSM monitor."""
     
-    rootname = CharField(primary_key=True)
+    #rootname = CharField(primary_key=True)
+    rootname = CharField()
     date = FloatField()
     proposid = IntegerField()
     detector = CharField()
@@ -350,7 +363,7 @@ class Rawacqs(BaseModel):
     cal_date = CharField()
     found = BooleanField()
     
-    filename = ForeignKeyField(Files,
+    filename = ForeignKeyField(Observations,
                                db_column='filename',
                                default=None,
                                to_field="filename",
@@ -358,3 +371,53 @@ class Rawacqs(BaseModel):
     
     class Meta:
         db_table = 'rawacqs'
+
+#-------------------------------------------------------------------------------
+
+class Darks(BaseModel):
+    
+    rootname = CharField()
+    detector = CharField()
+    date = FloatField()
+    dark = FloatField()
+    ta_dark = FloatField()
+    latitude = FloatField()
+    longitude = FloatField()
+    sun_lat = FloatField()
+    sun_lon = FloatField()
+    temp = FloatField()
+
+    filename = ForeignKeyField(Observations,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+    
+    class Meta:
+        db_table = 'darks'
+
+#-------------------------------------------------------------------------------
+
+class Stims(BaseModel):
+    """Record location of all STIM pulses"""
+
+    rootname = CharField()
+    time = FloatField(default=0)
+    abs_time = FloatField(default=0)
+    stim1_x = FloatField(default=0)
+    stim1_y = FloatField(default=0)
+    stim2_x = FloatField(default=0)
+    stim2_y = FloatField(default=0)
+    counts = FloatField(default=0)
+    segment = CharField()
+  
+    filename = ForeignKeyField(Observations,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+
+    class Meta:
+        db_table = 'stims'
+    
+#-------------------------------------------------------------------------------

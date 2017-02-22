@@ -178,3 +178,13 @@ def fuvb_corr_keys(file_result):
                         'exptime': hdu[1].header['exptime']
                         }
     return keywords
+#-------------------------------------------------------------------------------
+def obs_keys(file_result):
+    file_path = os.path.join(file_result.path, file_result.filename)
+    with fits.open(file_path) as hdu:
+            keywords = {'path': file_result.path,
+                        'rootname': hdu[0].header['rootname'],
+                        'filename': file_result.filename,
+                        'targname': hdu[0].header['targname']
+                        }
+    return keywords
