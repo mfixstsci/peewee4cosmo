@@ -25,7 +25,7 @@ from astropy.io import fits
 from astropy.table import Table
 
 from ..database.models import get_database, get_settings
-from ..database.models import Lampflash, Rawacqs
+from ..database.models import Lampflash, Rawacqs, Files
 from ..utils import remove_if_there
 
 #-------------------------------------------------------------------------------
@@ -87,7 +87,6 @@ def pull_flashes(filename):
                     'rootname': hdu[0].header['ROOTNAME'],
                     'proposid': hdu[0].header['PROPOSID'],
                     'detector': hdu[0].header['DETECTOR'],
-                    'segment': hdu[0].header['SEGMENT'],
                     'opt_elem': hdu[0].header['OPT_ELEM'],
                     'cenwave': hdu[0].header['CENWAVE'],
                     'fppos': hdu[0].header.get('FPPOS', None),
@@ -100,6 +99,7 @@ def pull_flashes(filename):
         #-- Open lampflash
         if '_lampflash.fits' in filename.filename:
             
+            out_info['segment'] = hdu[0].header['SEGMENT']
             #-- Get lamptab file
             out_info['lamptab'] = hdu[0].header['LAMPTAB'].split('$')[-1]
 
@@ -107,8 +107,12 @@ def pull_flashes(filename):
             fpoffset = out_info['fppos'] - 3
 
             if not len(hdu[1].data):
-                #yield out_info
-                yield out_info
+                #-- If there is no data, update the monitor_flag and exit.
+                database = get_database()
+                database.connect()
+                Files.update(monitor_flag=False).where(Files.filename == filename.filename).execute()
+                database.close()
+                sys.exit()
             else:
                 for i, line in enumerate(hdu[1].data):
                     
@@ -239,6 +243,11 @@ def make_plots(data, data_acqs, out_dir):
     
     mpl.rcParams['figure.subplot.hspace'] = 0.05
     
+    plt.rc('font', weight='bold')
+    plt.rc('xtick.major', size=5, pad=7)
+    plt.rc('xtick', labelsize=15)
+    plt.rc('ytick', labelsize=10)   
+    
     sorted_index = np.argsort(data['date'])
     data = data[sorted_index]
 
@@ -316,14 +325,14 @@ def make_plots(data, data_acqs, out_dir):
     ax3.plot( data['date'][G140L_B], data['x_shift'][G140L_B],'y.')
 
     ax.legend(shadow=True, numpoints=1, loc='upper left')
-    fig.suptitle('FUV SHIFT1[A/B]')
-    ax.set_xlabel('MJD')
-    ax.set_ylabel('SHIFT1[A/B] (pixels)')
+    fig.suptitle('FUV SHIFT1[A/B]', fontsize=20, fontweight='bold')
+    ax.set_xlabel('MJD', fontsize=20, fontweight='bold')
+    ax.set_ylabel('SHIFT1[A/B] (pixels)', fontsize=10, fontweight='bold')
 
     for axis,index in zip([ax,ax2,ax3],[G130M,G160M,G140L]):
         #axis.set_ylim(-300,300)
         axis.set_xlim(data['date'].min(),data['date'].max()+50 )
-        axis.set_ylabel('SHIFT1[A/B/C] (pixels)')
+        axis.set_ylabel('SHIFT1[A/B/C] (pixels)', fontsize=10, fontweight='bold')
         axis.axhline(y=0,color='r')
         axis.axhline(y=285,color='k',lw=3,ls='--',zorder=1,label='Search Range')
         axis.axhline(y=-285,color='k',lw=3,ls='--',zorder=1)
@@ -427,17 +436,17 @@ def make_plots(data, data_acqs, out_dir):
     ax4.xaxis.set_ticklabels(['' for item in ax3.xaxis.get_ticklabels()])
     sigma = data['x_shift'][G230L_A].std()
 
-    ax.set_title('NUV SHIFT1[A/B/C]')
+    ax.set_title('NUV SHIFT1[A/B/C]', fontsize=20, fontweight='bold')
     for axis, index in zip([ax, ax2, ax3, ax4], [G185M, G225M, G285M, G230L]):
         #axis.set_ylim(-110, 110)
         axis.set_xlim(data['date'].min(), data['date'].max() + 50)
-        axis.set_ylabel('SHIFT1[A/B/C] (pixels)')
+        axis.set_ylabel('SHIFT1[A/B/C] (pixels)', fontsize=10, fontweight='bold')
         fit, ydata, parameters, err = fit_data(
             data['date'][index], data['x_shift'][index])
         axis.plot(ydata, fit, 'k-', lw=3, label='%3.5fx' % (parameters[0]))
         axis.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1, numpoints=1, shadow=True, fontsize=12)
 
-    ax4.set_xlabel('date')
+    ax4.set_xlabel('date',fontsize=20, fontweight='bold')
 
     ax = fig.add_subplot(7, 1, 5)
     ax.plot(data['date'][NUV], data['x_shift'][NUV], '.')
@@ -445,7 +454,7 @@ def make_plots(data, data_acqs, out_dir):
         data['date'][NUV], data['x_shift'][NUV])
     ax.plot(ydata, fit, 'k-', lw=3, label='%3.5fx' % (parameters[0]))
     ax.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1,numpoints=1, shadow=True)
-    ax.set_ylabel('All NUV')
+    ax.set_ylabel('All NUV', fontsize=15, fontweight='bold')
     ax.xaxis.set_ticklabels(['' for item in ax.xaxis.get_ticklabels()])
     ax.set_xlim(data['date'].min(), data['date'].max() + 50)
     #ax.set_ylim(-110, 110)
@@ -459,8 +468,8 @@ def make_plots(data, data_acqs, out_dir):
     ax.plot(ydata, fit, 'k-', lw=3, label='%3.5fx' % (parameters[0]))
     ax.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1,numpoints=1, shadow=True)
     ax.set_xlim(data_acqs['date'].min(), data_acqs['date'].max() + 50)
-    ax.set_ylabel('MIRRORA')
-    ax.set_xlabel('date')
+    ax.set_ylabel('MIRRORA', fontsize=15, fontweight='bold')
+    ax.set_xlabel('date', fontsize=20, fontweight='bold')
     #ax.set_ylim(460, 630)
 
     mirrorb = np.where((data_acqs['opt_elem'] == 'MIRRORB')
@@ -472,8 +481,8 @@ def make_plots(data, data_acqs, out_dir):
     ax.plot(ydata, fit, 'k-', lw=3, label='%3.5fx' % (parameters[0]))
     ax.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1,numpoints=1, shadow=True)
     ax.set_xlim(data_acqs['date'].min(), data_acqs['date'].max() + 50)
-    ax.set_ylabel('MIRRORB')
-    ax.set_xlabel('date')
+    ax.set_ylabel('MIRRORB', fontsize=15, fontweight='bold')
+    ax.set_xlabel('date', fontsize=20, fontweight='bold')
     #ax.set_ylim(260, 400)
 
     remove_if_there(os.path.join(out_dir, 'NUV_shifts.png'))
@@ -507,7 +516,7 @@ def make_plots(data, data_acqs, out_dir):
     for grating in list(set(data['opt_elem'])):
         fig = plt.figure()
         ax = fig.add_axes([.1, .1, .75, .8])
-        ax.set_title(grating)
+        ax.set_title(grating, fontsize=20, fontweight='bold')
         for cenwave in list(set(data['cenwave'])):
             index = np.where((data['opt_elem'] == grating) &
                              (data['cenwave'] == cenwave))[0]
@@ -562,7 +571,7 @@ def make_plots_2(data, data_acqs, out_dir):
         n_seg = len(all_segments)
 
         fig = plt.figure()
-        fig.suptitle('Shift2 vs Shift1 {}'.format(cenwave))
+        fig.suptitle('Shift2 vs Shift1 {}'.format(cenwave), fontsize=20, fontweight='bold')
 
         for i, segment in enumerate(all_segments):
             index = np.where( (data['segment'] == segment) &
@@ -570,8 +579,8 @@ def make_plots_2(data, data_acqs, out_dir):
 
             ax = fig.add_subplot(n_seg, 1, i+1)
             ax.plot(data[index]['x_shift'], data[index]['y_shift'], 'o')
-            ax.set_xlabel('x_shift')
-            ax.set_ylabel('y_shift')
+            ax.set_xlabel('x_shift', fontsize=20, fontweight='bold')
+            ax.set_ylabel('y_shift', fontsize=15, fontweight='bold')
             #ax.set_ylabel('SHIFT2 vs SHIFT1 {}'.format(segment))
             #ax.set_ylim(-20, 20)
         remove_if_there(os.path.join(out_dir, 'shift_relation_{}.png'.format(cenwave)))
@@ -631,7 +640,7 @@ def fp_diff(data):
         plt.plot(all_mjd, all_diff, 'o', label='%s' % (cenwave))
         plt.xlabel('MJD')
         plt.ylabel('SHIFT1 difference (pixels)')
-        plt.title(cenwave)
+        plt.title(cenwave, fontsize=20, fontweight='bold')
         plt.legend(shadow=True, numpoints=1, loc='upper left')
         remove_if_there(os.path.join(out_dir, 'difference_%s.pdf' % (cenwave)))
         plt.savefig(os.path.join(out_dir, 'difference_%s.pdf' % (cenwave)))

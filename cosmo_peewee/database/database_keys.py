@@ -1,5 +1,6 @@
 import os
 from astropy.io import fits
+
 #-------------------------------------------------------------------------------
 
 def nuv_raw_keys(file_result):
@@ -162,7 +163,9 @@ def fuva_corr_keys(file_result):
                         'exptime': hdu[1].header['exptime']
                         }
     return keywords
+
 #-------------------------------------------------------------------------------
+
 def fuvb_corr_keys(file_result):
     file_path = os.path.join(file_result.path, file_result.filename)
     with fits.open(file_path) as hdu:
@@ -178,13 +181,43 @@ def fuvb_corr_keys(file_result):
                         'exptime': hdu[1].header['exptime']
                         }
     return keywords
+
 #-------------------------------------------------------------------------------
+
 def obs_keys(file_result):
     file_path = os.path.join(file_result.path, file_result.filename)
     with fits.open(file_path) as hdu:
             keywords = {'path': file_result.path,
                         'rootname': hdu[0].header['rootname'],
                         'filename': file_result.filename,
-                        'targname': hdu[0].header['targname']
+                        'targname': hdu[0].header['targname'],
                         }
     return keywords
+
+#-------------------------------------------------------------------------------
+
+def file_keys(file_tuple):
+    
+    path, filename = file_tuple
+    
+    try:
+        #-- Set hard keys...
+        keywords = {'path': path,
+                    'filename': filename
+                    }        
+        #-- Open files to see if it opens or has data
+        with fits.open(os.path.join(path,filename)) as hdu:
+            if not len(hdu[1].data):
+                keywords['monitor_flag'] = False
+        
+        #-- Hey, looks like it opens and has data
+        keywords['monitor_flag'] = True
+    
+    #-- Sorry, file won't open or doesn't have data...
+    except (IOError, TypeError, ValueError) as e:
+        keywords['monitor_flag'] = False
+    
+    #print(keywords)
+    return keywords 
+
+#-------------------------------------------------------------------------------

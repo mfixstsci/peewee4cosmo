@@ -8,13 +8,23 @@ import logging
 logger = logging.getLogger(__name__)
 
 from astropy.io import fits
-from peewee import *
-import functools
-import multiprocessing as mp
 
+import argparse
+
+from peewee import *
+
+import functools
+
+import itertools
+
+import multiprocessing as mp
+import numpy as np
 from .models import get_database, get_settings
-from .models import Files, NUV_raw_headers, NUV_corr_headers, FUV_primary_headers, FUVA_raw_headers, FUVB_raw_headers, FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations
-from .database_keys import nuv_raw_keys, nuv_corr_keys, fuv_primary_keys, fuva_raw_keys, fuvb_raw_keys, fuva_corr_keys, fuvb_corr_keys, obs_keys
+from .models import Files, NUV_raw_headers, NUV_corr_headers, FUV_primary_headers, FUVA_raw_headers, FUVB_raw_headers
+from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations
+
+from .database_keys import nuv_raw_keys, nuv_corr_keys, fuv_primary_keys, fuva_raw_keys, fuvb_raw_keys, fuva_corr_keys, fuvb_corr_keys, obs_keys, file_keys
+
 from ..filesystem import find_all_datasets
 
 from ..osm.monitor import pull_flashes
@@ -25,9 +35,31 @@ from ..dark.monitor import pull_orbital_info
 
 from ..stim.monitor import locate_stims
 from ..stim.monitor import stim_monitor
+
 #-------------------------------------------------------------------------------
 
-def bulk_insert(file_result, table, function):
+def bulk_insert(table, data_source):
+    
+    database = get_database()
+    database.connect()
+
+    try:
+        with database.atomic():
+            table.insert_many(data_source).execute()
+    
+    except IntegrityError as e:
+        print('IntegrityError:', e)
+    except IOError as e:
+        print('IOError:',  e)
+    except OperationalError as e:
+        print('OperationalError', e)
+    except InternalError as e:
+        print('InternalError', e)
+
+    database.close()
+#-------------------------------------------------------------------------------
+
+def pull_data(file_result, function):
     
     """This function inserts the rows into the data base. We use the partials
     to add data quick using pool.map().
@@ -42,7 +74,7 @@ def bulk_insert(file_result, table, function):
         List of files you wish to extract metadata from.
     
     """
-    
+
     try:
     
         data = function(file_result)
@@ -50,25 +82,13 @@ def bulk_insert(file_result, table, function):
         if isinstance(data, dict):
             data = [data]
         elif isinstance(data, types.GeneratorType):
-            pass
+            data = list(data)
         
-        #-- Pull from generator.        
-        for row in data:
-            table.create(**row)
+        return data
     
-    except IntegrityError as e:
-        print('IntegrityError:', e)
-        print(os.path.join(file_result.path, file_result.filename))
     except IOError as e:
         print('IOError:',  e)
-        print(os.path.join(file_result.path, file_result.filename))
-    except OperationalError as e:
-        print('OperationalError', e)
-        print(os.path.join(file_result.path, file_result.filename))
-    except InternalError as e:
-        print('InternalError', e)
-        print(os.path.join(file_result.path, file_result.filename))
-        
+    
 #-------------------------------------------------------------------------------
 
 def bulk_delete(all_files):
@@ -88,14 +108,30 @@ def bulk_delete(all_files):
     None
     """
 
+    #-- Combine tuples of path and filenames to check for existance....
+    combined_paths = [os.path.join(path, filename) for (path, filename) in all_files]
+
     #-- Not the prettiest thing in the whole world....
-    files_to_remove = [print(full_path) for full_path in all_files if full_path == '/smov/cos/Data/14675/otfrdata/09-14-2016/laaabbccr_06324204223_spt.fits.gz']
-        
+    files_to_remove = [os.path.basename(full_path) for full_path in combined_paths if not os.path.exists(full_path)]
+    
     database = get_database()
     database.connect()
 
-    Files.delete().where(Files.filename.in_(files_to_remove)).execute()  
-    
+    logger.info('FOUND {} FILES TO DELETE!'.format(len(files_to_remove)))
+    #-- Crude implimentation but right now it works.
+    #-- Delete instances of files in DB that don't exist in files and observations tables.
+    #-- This makes sure that the most up to date files in DB are ingested.    
+    for f in files_to_remove:
+        logger.info("DELETING INSTANCES OF {}".format(f))
+        
+        Files.get(Files.filename == f).delete_instance()
+        
+        #-- Some files exist in files that need to be removed that don't exist in Observations.
+        try:
+            Observations.get(Observations.filename == f).delete_instance()
+        except DoesNotExist:
+            continue
+
     database.close()      
 
 #-------------------------------------------------------------------------------
@@ -130,58 +166,59 @@ def populate_files(settings):
     
     """
 
+    #-- Open DB and get previous files.
     database = get_database()
     database.connect()
-    
-    #-- Get previous files
-    previous_files = {os.path.join(result.path, result.filename) for result in Files.select(Files.path, Files.filename)}
 
-    #-- Make sure that the previous files in the database actually exist.
-    bulk_delete(previous_files)
-    
-    for (path, filename) in find_all_datasets(settings['data_location'], settings['num_cpu']):
-        #-- Join path + files together
-        full_filepath = os.path.join(path, filename)
-       
-        #-- If file is in table then move to the next iteration. If not, add.
-        if full_filepath in previous_files:
-            continue
-        
-        #-- Set monitoring flags for ingestion, we have some corrupt files in the filesystem
-        #-- False flags will allow us to avoid having NULL rows in monitoring metadata tables
-        #-- and also track them.
-        monitor_flag = True
-        try:
-            fits.open(full_filepath)
-        except IOError:
-            monitor_flag = False
+    previous_files = {(result.path, result.filename) for result in Files.select(Files.path, Files.filename)}
 
-        #-- There are some fishy files in the filesystem we need to fish out, here is way to expose them.
-        try:
-            #-- Insert metadata
-            Files.insert(path=path,
-                         filename=filename,
-                         monitor_flag=monitor_flag).execute() 
-        
-        except IntegrityError as e:
-            print('Integrity Error', e)
-            print(full_filepath)
-    
     database.close()
 
-#-------------------------------------------------------------------------------
-def populate_observations(num_cpu=2):
+    #-- Bulk delete files that arent in /smov/cos/Data....
+    bulk_delete(previous_files)
+
+    #-- Create a set of all the data sets in /smov/cos/Data/
+    smov_cos_data = set(find_all_datasets(settings['data_location'], settings['num_cpu']))
+
+    #-- Turn the difference of the sets into a list to pass to bulk_insert
+    files_to_add = list(smov_cos_data - previous_files)
     
-    database = get_database()
-    database.connect()
+    logger.info('FOUND {} FILES TO ADD!'.format(len(files_to_add)))
+
+    #-- set up partials
+    partial = functools.partial(pull_data,
+                                function=file_keys)
+        
+    #-- pool up the partials and pass it the iterable (files)
+    pool = mp.Pool(processes=settings['num_cpu'])
+    
+    #-- Only add 100 files at a time incase something bad happens....
+    for idx in xrange(0, len(files_to_add), 100):
+        data_to_insert = pool.map(partial, files_to_add[idx:idx+100])
+        
+        if len(data_to_insert):
+            #-- Pass to bulk insert.    
+            bulk_insert(Files, itertools.chain(*data_to_insert))
+
+#-------------------------------------------------------------------------------
+
+def populate_observations(num_cpu=2):
+    """Populate table with observations. This is seperate files that the 
+    monitors use from telemetry files like .jit, .jif, cci's, etc.
+    """
 
     search_list = ['%rawtag%.gz',
                    '%corrtag%.gz',
-                   '%_x1d%.gz',
+                   '%_x1d.%.gz', #-- Get x1ds
+                   '%_x1ds%.gz', #-- Get x1dsums
                    '%rawacq%.gz%',
                    '%lampflash%.gz']
-
+        
     for search_str in search_list:
+        database = get_database()
+        database.connect()
+
+        logger.info('POPULATING {} INTO OBSERVATIONS'.format(search_str))
         files_to_add = (Files.select()
                             .where(
                                 Files.filename.contains(search_str) & 
@@ -189,22 +226,23 @@ def populate_observations(num_cpu=2):
                                 (Files.monitor_flag == True)
                             ))
 
+        database.close() 
+        
         #-- set up partials
-        partial = functools.partial(bulk_insert,
-                                    table=Observations,
+        partial = functools.partial(pull_data,
                                     function=obs_keys)
         
         #-- pool up the partials and pass it the iterable (files)
         pool = mp.Pool(processes=num_cpu)
-        pool.map(partial, files_to_add)
-            
-    database.close() 
+        data_to_insert = pool.map(partial, files_to_add)
+        
+        if len(data_to_insert):
+            #-- Pass to bulk insert.
+            bulk_insert(Observations, itertools.chain(*data_to_insert))
+        
 #-------------------------------------------------------------------------------
 
 def populate_tables(table, table_keys, search_str, num_cpu=2):
-
-    #-- Setting up logging
-    setup_logging()
     
     #-- Connect to DB
     database = get_database()
@@ -253,19 +291,19 @@ def populate_tables(table, table_keys, search_str, num_cpu=2):
                                 Observations.filename.not_in(table.select(table.filename)) 
                             ))
     
-    #-- Show the user how many files are being added to the DB tables.
-    #logger.info('ADDING {} FILES TO {}'.format(files_to_add.count(), table._meta.db_table))
+    database.close()
     
     #-- set up partials
-    partial = functools.partial(bulk_insert,
-                                table=table,
+    partial = functools.partial(pull_data,
                                 function=table_keys)
     
     #-- pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=num_cpu)
-    pool.map(partial, files_to_add)
+    data_to_insert = pool.map(partial, files_to_add)
     
-    database.close()
+    if len(data_to_insert):
+        #-- Pass to bulk insert.
+        bulk_insert(table, itertools.chain(*data_to_insert))
 
 #-------------------------------------------------------------------------------
 def populate_osm(num_cpu=2):
@@ -278,20 +316,23 @@ def populate_osm(num_cpu=2):
                                 Observations.filename.contains('%lampflash%.gz') & 
                                 Observations.filename.not_in(Lampflash.select(Lampflash.filename)) 
                             ))
+    database.close()
 
-    partial = functools.partial(bulk_insert,
-                                table=Lampflash,
+    partial = functools.partial(pull_data,
                                 function=pull_flashes)
     
     #-- pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=num_cpu)
-    pool.map(partial, files_to_add)
+    data_to_insert = pool.map(partial, files_to_add)
     
-    database.close()
+    if len(data_to_insert):
+        #-- Pass to bulk insert.
+        bulk_insert(Lampflash, itertools.chain(*data_to_insert))
 
 #-------------------------------------------------------------------------------
 def populate_acqs(num_cpu=2):
     """ Populate the rawacqs table"""
+    
     database = get_database()
     database.connect()
 
@@ -300,16 +341,20 @@ def populate_acqs(num_cpu=2):
                                 Observations.filename.contains('%rawacq%.gz') & 
                                 Observations.filename.not_in(Rawacqs.select(Rawacqs.filename))
                             ))
-
-    partial = functools.partial(bulk_insert,
-                                table=Rawacqs,
+    
+    database.close()
+ 
+    partial = functools.partial(pull_data,
                                 function=pull_flashes)
     
     #-- pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=num_cpu)
-    pool.map(partial, files_to_add)
+    data_to_insert = pool.map(partial, files_to_add)
     
-    database.close()
+    if len(data_to_insert):
+        #-- Pass to bulk insert.
+        bulk_insert(Rawacqs, itertools.chain(*data_to_insert))
+
 #-------------------------------------------------------------------------------
 
 def populate_darks(num_cpu=2):
@@ -319,20 +364,22 @@ def populate_darks(num_cpu=2):
 
     files_to_add = (Observations.select()
                             .where( 
-                                Observations.filename.not_in(Darks.select(Darks.filename)) &
-                                Observations.filename.contains('%corrtag%.gz') &
-                                Observations.targname == 'DARK'
+                                Observations.filename.contains('%corrtag%.gz') & 
+                                Observations.filename.not_in(Darks.select(Darks.filename)) & 
+                                (Observations.targname == 'DARK')
                             ))
-    
-    partial = functools.partial(bulk_insert,
-                                table=Darks,
+    database.close()
+
+    partial = functools.partial(pull_data,
                                 function=pull_orbital_info)
     
     #-- pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=num_cpu)
-    pool.map(partial, files_to_add)
+    data_to_insert = pool.map(partial, files_to_add)
 
-    database.close()
+    if len(data_to_insert): 
+        #-- Pass to bulk insert.
+        bulk_insert(Darks, itertools.chain(*data_to_insert))
 
 #-------------------------------------------------------------------------------
 
@@ -347,22 +394,18 @@ def populate_stims(num_cpu=2):
                                 Observations.filename.contains('%corrtag\_%.gz') & 
                                 Observations.filename.not_in(Stims.select(Stims.filename)) 
                             ))
-    
-    '''
+    database.close()
+
     partial = functools.partial(bulk_insert,
-                                table=Stims,
                                 function=locate_stims)
     
     #-- pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=num_cpu)
-    pool.map(partial, files_to_add)
-    '''
+    data_to_insert = pool.map(partial, files_to_add)
     
-    for f in files_to_add:
-        print(os.path.join(f.path, f.filename))
-        bulk_insert(f, Stims, locate_stims)
-    
-    database.close()
+    if len(data_to_insert): 
+        #-- Pass to bulk insert.
+        bulk_insert(Stims, itertools.chain(*data_to_insert))
 
 #-------------------------------------------------------------------------------
 
@@ -391,8 +434,7 @@ def ingest_all():
               Rawacqs,
               Darks,
               Stims]
-
-
+        
     #-- Safe checks existance of tables first to make sure they dont get clobbered.
     database.create_tables(tables, safe=True)
     
@@ -401,56 +443,52 @@ def ingest_all():
     
     #-- Files
     logger.info("Ingesting Files from {}".format(settings['data_location']))
-    #populate_files(settings)
+    populate_files(settings)
 
-    #-- Observation table    
-    logger.info("Populating observations table.")
-    #populate_observations(settings['num_cpu'])
+    # #-- Observation table    
+    # logger.info("Populating observations table.")
+    # populate_observations(settings['num_cpu'])
 
-    #-- NUV rawtag headers    
-    logger.info("Populating NUV rawtag headers.")
-    #populate_tables(NUV_raw_headers, nuv_raw_keys, '%_rawtag.fits.gz%', settings['num_cpu'])
+    # #-- NUV rawtag headers    
+    # logger.info("Populating NUV rawtag headers.")
+    # populate_tables(NUV_raw_headers, nuv_raw_keys, '%_rawtag.fits.gz%', settings['num_cpu'])
 
-    #-- NUV corrtag headers    
-    logger.info("Populating NUV corrtag headers.")
-    #populate_tables(NUV_corr_headers, nuv_corr_keys, '%_corrtag.fits.gz%', settings['num_cpu'])
+    # #-- NUV corrtag headers    
+    # logger.info("Populating NUV corrtag headers.")
+    # opulate_tables(NUV_corr_headers, nuv_corr_keys, '%_corrtag.fits.gz%', settings['num_cpu'])
 
-    #-- FUV primary headers    
-    logger.info("Populating FUV primary headers.")
-    #populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
-    #populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
+    # #-- FUV primary headers    
+    # logger.info("Populating FUV primary headers.")
+    # populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
+    # populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
-    #-- FUV rawtag headers    
-    logger.info("Populating FUV rawtag headers.")
-    #populate_tables(FUVA_raw_headers, fuva_raw_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
-    #populate_tables(FUVB_raw_headers, fuvb_raw_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
+    # #-- FUV rawtag headers    
+    # logger.info("Populating FUV rawtag headers.")
+    # populate_tables(FUVA_raw_headers, fuva_raw_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
+    # populate_tables(FUVB_raw_headers, fuvb_raw_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
-    #-- FUV corrtag headers    
-    logger.info("Populating FUV corrtag headers.")
-    #populate_tables(FUVA_corr_headers, fuva_corr_keys, '%corrtag_a.fits.gz%', settings['num_cpu'])
-    #populate_tables(FUVB_corr_headers, fuvb_corr_keys, '%corrtag_b.fits.gz%', settings['num_cpu'])
+    # #-- FUV corrtag headers    
+    # logger.info("Populating FUV corrtag headers.")
+    # populate_tables(FUVA_corr_headers, fuva_corr_keys, '%corrtag_a.fits.gz%', settings['num_cpu'])
+    # populate_tables(FUVB_corr_headers, fuvb_corr_keys, '%corrtag_b.fits.gz%', settings['num_cpu'])
 
-    #-- Populate rawacq monitor meta
-    logger.info("Populating Rawacqs Table")
-    populate_acqs(settings['num_cpu'])
+    # #-- Populate rawacq monitor meta
+    # logger.info("Populating Rawacqs Table")
+    # populate_acqs(settings['num_cpu'])
 
-    #-- Populate OSM monitor metadata
-    logger.info("Populating OSM Shift Table")
-    populate_osm(settings['num_cpu'])
+    # #-- Populate OSM monitor metadata
+    # logger.info("Populating OSM Shift Table")
+    # populate_osm(settings['num_cpu'])
 
-
-    #-- Populate Darks monitor meta
-    logger.info("Populating Darks Table")
-    #populate_darks(settings['num_cpu'])
-
-    #-- Populate Stim monitor meta
-    logger.info("Populating Stims Table")
-    #populate_stims(settings['num_cpu'])
+    # #-- Populate Darks monitor meta
+    # logger.info("Populating Darks Table")
+    # populate_darks(settings['num_cpu'])
     
 #-------------------------------------------------------------------------------
 
 def run_monitors():
     """ Run all COS Monitors"""
     osm_monitor()
-    #dark_monitor()
+    dark_monitor()
+
 #-------------------------------------------------------------------------------

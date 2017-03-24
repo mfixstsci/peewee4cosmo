@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 import os
 
 from peewee import *
+from playhouse.pool import PooledMySQLDatabase
 
 try:
     import yaml
@@ -40,10 +41,7 @@ def get_settings(config_file=None):
 #-------------------------------------------------------------------------------
 
 def get_database(config_file=None):
-    """ Parse config file and load settings
-
-    If no config file is supplied, the configuration file will assume to be
-    located at '~/configure.yaml'.
+    """ Open connection to database
 
     Parameters
     ----------
@@ -58,11 +56,12 @@ def get_database(config_file=None):
     """
 
     settings = get_settings()
-    database = MySQLDatabase(settings['database'],
-                             host=settings['host'],
-                             port=settings['port'],
-                             user=settings['user'],
-                             passwd=settings['password'])
+
+    database = PooledMySQLDatabase(settings['database'],
+                                   host=settings['host'],
+                                   port=settings['port'],
+                                   user=settings['user'],
+                                   passwd=settings['password'], stale_timeout=150)
     return database
 
 #-------------------------------------------------------------------------------
@@ -79,7 +78,7 @@ class Files(BaseModel):
     path = CharField()
     filename = CharField(primary_key=True)
     monitor_flag = BooleanField()
-
+    
     class Meta:
         db_table = 'files'   
 
@@ -90,7 +89,9 @@ class Observations(BaseModel):
     path = CharField()
     filename = CharField(primary_key=True)
     targname = CharField()
-    
+    rootname = CharField()
+    monitor_flag = BooleanField()
+  
     class Meta:
         db_table = 'observations'  
 
@@ -317,21 +318,21 @@ class Lampflash(BaseModel):
 
     """Preped metadata for OSM monitor."""
 
-    rootname = CharField()
-    date = FloatField()
-    proposid = IntegerField()
-    detector = CharField()
-    segment = CharField()
-    opt_elem = CharField()
-    cenwave = IntegerField()
-    fppos = IntegerField()
-    lamptab = CharField()
-    flash = IntegerField()
-    x_shift = FloatField()
-    y_shift = FloatField()
-    filetype = CharField()
-    cal_date = CharField()
-    found = BooleanField()
+    rootname = CharField(default='N/A')
+    date = FloatField(default=-999.9)
+    proposid = IntegerField(default=-999)
+    detector = CharField(default='N/A')
+    segment = CharField(default='N/A')
+    opt_elem = CharField(default='N/A')
+    cenwave = IntegerField(default=-999)
+    fppos = IntegerField(default=-999)
+    lamptab = CharField(default='N/A')
+    flash = IntegerField(default=-999)
+    x_shift = FloatField(default=-999.9)
+    y_shift = FloatField(default=-999.9)
+    filetype = CharField(default='N/A')
+    cal_date = CharField(default='N/A')
+    found = BooleanField(default=False)
     
     filename = ForeignKeyField(Observations,
                                db_column='filename',
@@ -341,7 +342,6 @@ class Lampflash(BaseModel):
     
     class Meta:
         db_table = 'lampflash'
-        #primary_key = CompositeKey('filename', 'flash', 'segment')
 #-------------------------------------------------------------------------------
 
 class Rawacqs(BaseModel):
@@ -375,6 +375,7 @@ class Rawacqs(BaseModel):
 #-------------------------------------------------------------------------------
 
 class Darks(BaseModel):
+    """Record dark rate"""
     
     rootname = CharField()
     detector = CharField()
