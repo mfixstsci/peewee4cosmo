@@ -23,7 +23,8 @@ from .models import get_database, get_settings
 from .models import Files, NUV_raw_headers, NUV_corr_headers, FUV_primary_headers, FUVA_raw_headers, FUVB_raw_headers
 from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations
 
-from .database_keys import nuv_raw_keys, nuv_corr_keys, fuv_primary_keys, fuva_raw_keys, fuvb_raw_keys, fuva_corr_keys, fuvb_corr_keys, obs_keys, file_keys
+from .database_keys import nuv_raw_keys, nuv_corr_keys, fuv_primary_keys, fuva_raw_keys, fuvb_raw_keys
+from .database_keys import fuva_corr_keys, fuvb_corr_keys, obs_keys, file_keys
 
 from ..filesystem import find_all_datasets
 
@@ -39,14 +40,31 @@ from ..stim.monitor import stim_monitor
 #-------------------------------------------------------------------------------
 
 def bulk_insert(table, data_source):
+    """ Ingest data into database
+
+    Parameters
+    ----------
+    table: Peewee table object
+        Table that is going to be populated.
+    data_source: list
+        A list full of dictionaries to be ingested.
+
+    Returns
+    -------
+    None
+    
+    """
     
     database = get_database()
     database.connect()
 
     try:
-        with database.atomic():
-            table.insert_many(data_source).execute()
-    
+        with db.atomic():
+            #-- Only add 100 files at a time....
+            for idx in range(0, len(data_source), 100):
+                table.insert_many(data_source[idx:idx+100]).execute()
+
+    #-- Lots of multiples, hopefully will be fixed with new filesystem implimentation.   
     except IntegrityError as e:
         print('IntegrityError:', e)
     except IOError as e:
@@ -106,6 +124,7 @@ def bulk_delete(all_files):
     Returns
     -------
     None
+   
     """
 
     #-- Combine tuples of path and filenames to check for existance....
@@ -137,6 +156,18 @@ def bulk_delete(all_files):
 #-------------------------------------------------------------------------------
 
 def setup_logging():
+    """
+    Set up logging....
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+
+    """
     #-- create the logging file handler
     logging.basicConfig(filename="cosmos_monitors.log",
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -191,20 +222,27 @@ def populate_files(settings):
         
     #-- pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=settings['num_cpu'])
-    
-    #-- Only add 100 files at a time incase something bad happens....
-    for idx in xrange(0, len(files_to_add), 100):
-        data_to_insert = pool.map(partial, files_to_add[idx:idx+100])
+    data_to_insert = pool.map(partial, files_to_add)    
         
-        if len(data_to_insert):
-            #-- Pass to bulk insert.    
-            bulk_insert(Files, itertools.chain(*data_to_insert))
+    if len(data_to_insert):
+        #-- Pass to bulk insert.    
+        bulk_insert(Files, itertools.chain(*data_to_insert))
 
 #-------------------------------------------------------------------------------
 
 def populate_observations(num_cpu=2):
-    """Populate table with observations. This is seperate files that the 
-    monitors use from telemetry files like .jit, .jif, cci's, etc.
+    """Populate table with observations. This seperates files that the 
+    monitors use from telemetry/MAST created files like .jit, .jif, cci's, etc.
+
+    Parameters
+    ----------
+    num_cpu: int
+        number of worker processes.
+
+    Returns
+    -------
+    None
+    
     """
 
     search_list = ['%rawtag%.gz',
@@ -243,7 +281,25 @@ def populate_observations(num_cpu=2):
 #-------------------------------------------------------------------------------
 
 def populate_tables(table, table_keys, search_str, num_cpu=2):
-    
+    """Parse data from different modes to proper tables. 
+
+    Parameters
+    ----------
+    table: Peewee table object
+        Table you wish to populate
+    table_keys: function
+        Keywords that will populate fields in tables.
+    search_str: str
+        A SQL formatted search string
+    num_cpu: int
+        number of worker processes.
+
+    Returns
+    -------
+    None
+
+    """
+
     #-- Connect to DB
     database = get_database()
     database.connect()
@@ -307,7 +363,18 @@ def populate_tables(table, table_keys, search_str, num_cpu=2):
 
 #-------------------------------------------------------------------------------
 def populate_osm(num_cpu=2):
-    """ Populate the OSM table"""
+    """ Populate the OSM table
+    
+    Parameters
+    ----------
+    num_cpu: int
+        number of worker processes.
+
+    Returns
+    -------
+    None
+
+    """
     database = get_database()
     database.connect()
 
@@ -331,7 +398,18 @@ def populate_osm(num_cpu=2):
 
 #-------------------------------------------------------------------------------
 def populate_acqs(num_cpu=2):
-    """ Populate the rawacqs table"""
+    """ Populate the rawacqs table
+    
+    Parameters
+    ----------
+    num_cpu: int
+        number of worker processes.
+
+    Returns
+    -------
+    None
+
+    """
     
     database = get_database()
     database.connect()
@@ -358,7 +436,18 @@ def populate_acqs(num_cpu=2):
 #-------------------------------------------------------------------------------
 
 def populate_darks(num_cpu=2):
-    """ Populate the dark table"""
+    """ Populate the dark table
+    
+    Parameters
+    ----------
+    num_cpu: int
+        number of worker processes.
+
+    Returns
+    -------
+    None
+
+    """
     database = get_database()
     database.connect()
 
@@ -384,7 +473,21 @@ def populate_darks(num_cpu=2):
 #-------------------------------------------------------------------------------
 
 def populate_stims(num_cpu=2):
-    """ Populate the rawacqs table"""
+    """ Populate the stim pulse table
+    
+    None of the monitoring code has been integrated into the system yet.
+    Still working with the monitoring team to refactor monitor....
+    
+    Parameters
+    ----------
+    num_cpu: int
+        number of worker processes.
+
+    Returns
+    -------
+    None
+
+    """
     
     database = get_database()
     database.connect()
@@ -410,13 +513,24 @@ def populate_stims(num_cpu=2):
 #-------------------------------------------------------------------------------
 
 def ingest_all():
-    """Create tables and run all ingestion scripts"""
+    """Create tables and run all ingestion scripts
+    
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+
+    """
     
     setup_logging()
+    
     #-- Get settings for functions
     settings = get_settings()
     
-    #-- Open DB
+    #-- Open DB connection.
     database = get_database()
     database.connect()
     
@@ -432,62 +546,72 @@ def ingest_all():
               FUVB_corr_headers,
               Lampflash,
               Rawacqs,
-              Darks,
-              Stims]
+              Darks]
         
     #-- Safe checks existance of tables first to make sure they dont get clobbered.
     database.create_tables(tables, safe=True)
     
-    #-- Close DB
+    #-- Close DB connection.
     database.close()
     
     #-- Files
     logger.info("Ingesting Files from {}".format(settings['data_location']))
     populate_files(settings)
 
-    # #-- Observation table    
-    # logger.info("Populating observations table.")
-    # populate_observations(settings['num_cpu'])
+    #-- Observation table    
+    logger.info("Populating observations table.")
+    populate_observations(settings['num_cpu'])
 
-    # #-- NUV rawtag headers    
-    # logger.info("Populating NUV rawtag headers.")
-    # populate_tables(NUV_raw_headers, nuv_raw_keys, '%_rawtag.fits.gz%', settings['num_cpu'])
+    #-- NUV rawtag headers    
+    logger.info("Populating NUV rawtag headers.")
+    populate_tables(NUV_raw_headers, nuv_raw_keys, '%_rawtag.fits.gz%', settings['num_cpu'])
 
-    # #-- NUV corrtag headers    
-    # logger.info("Populating NUV corrtag headers.")
-    # opulate_tables(NUV_corr_headers, nuv_corr_keys, '%_corrtag.fits.gz%', settings['num_cpu'])
+    #-- NUV corrtag headers    
+    logger.info("Populating NUV corrtag headers.")
+    opulate_tables(NUV_corr_headers, nuv_corr_keys, '%_corrtag.fits.gz%', settings['num_cpu'])
 
-    # #-- FUV primary headers    
-    # logger.info("Populating FUV primary headers.")
-    # populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
-    # populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
+    #-- FUV primary headers    
+    logger.info("Populating FUV primary headers.")
+    populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
+    populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
-    # #-- FUV rawtag headers    
-    # logger.info("Populating FUV rawtag headers.")
-    # populate_tables(FUVA_raw_headers, fuva_raw_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
-    # populate_tables(FUVB_raw_headers, fuvb_raw_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
+    #-- FUV rawtag headers    
+    logger.info("Populating FUV rawtag headers.")
+    populate_tables(FUVA_raw_headers, fuva_raw_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
+    populate_tables(FUVB_raw_headers, fuvb_raw_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
-    # #-- FUV corrtag headers    
-    # logger.info("Populating FUV corrtag headers.")
-    # populate_tables(FUVA_corr_headers, fuva_corr_keys, '%corrtag_a.fits.gz%', settings['num_cpu'])
-    # populate_tables(FUVB_corr_headers, fuvb_corr_keys, '%corrtag_b.fits.gz%', settings['num_cpu'])
+    #-- FUV corrtag headers    
+    logger.info("Populating FUV corrtag headers.")
+    populate_tables(FUVA_corr_headers, fuva_corr_keys, '%corrtag_a.fits.gz%', settings['num_cpu'])
+    populate_tables(FUVB_corr_headers, fuvb_corr_keys, '%corrtag_b.fits.gz%', settings['num_cpu'])
 
-    # #-- Populate rawacq monitor meta
-    # logger.info("Populating Rawacqs Table")
-    # populate_acqs(settings['num_cpu'])
+    #-- Populate rawacq monitor meta
+    logger.info("Populating Rawacqs Table")
+    populate_acqs(settings['num_cpu'])
 
-    # #-- Populate OSM monitor metadata
-    # logger.info("Populating OSM Shift Table")
-    # populate_osm(settings['num_cpu'])
+    #-- Populate OSM monitor metadata
+    logger.info("Populating OSM Shift Table")
+    populate_osm(settings['num_cpu'])
 
-    # #-- Populate Darks monitor meta
-    # logger.info("Populating Darks Table")
-    # populate_darks(settings['num_cpu'])
+    #-- Populate Darks monitor meta
+    logger.info("Populating Darks Table")
+    populate_darks(settings['num_cpu'])
     
 #-------------------------------------------------------------------------------
 
 def run_monitors():
-    """ Run all COS Monitors"""
+    """ Run all COS Monitors
+    
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    
+    """
+    
     osm_monitor()
     dark_monitor()
 

@@ -4,6 +4,15 @@ from astropy.io import fits
 #-------------------------------------------------------------------------------
 
 def nuv_raw_keys(file_result):
+    """Keys for COS NUV rawtags
+    
+    Parameters
+    ----------
+    file_result: tuple
+        A tuple with a path and filename
+    
+    """
+
     file_path = os.path.join(file_result.path, file_result.filename)
     with fits.open(file_path) as hdu:
             keywords = {'filename': file_result.filename,
@@ -47,6 +56,15 @@ def nuv_raw_keys(file_result):
 #-------------------------------------------------------------------------------
 
 def nuv_corr_keys(file_result):
+    """Keys for COS NUV corrtags
+    
+    Parameters
+    ----------
+    file_result: tuple
+        A tuple with a path and filename
+    
+    """
+
     file_path = os.path.join(file_result.path, file_result.filename)
     with fits.open(file_path) as hdu:
             keywords = {'filename': file_result.filename,
@@ -76,6 +94,15 @@ def nuv_corr_keys(file_result):
 #-------------------------------------------------------------------------------
 
 def fuv_primary_keys(file_result):
+    """COS FUV keywords that are shared between all data products.
+    
+    Parameters
+    ----------
+    file_result: tuple
+        A tuple with a path and filename
+    
+    """
+
     file_path = os.path.join(file_result.path, file_result.filename)
     with fits.open(file_path) as hdu:
             keywords = {'filename': file_result.filename,
@@ -115,6 +142,15 @@ def fuv_primary_keys(file_result):
 #-------------------------------------------------------------------------------
 
 def fuva_raw_keys(file_result):
+    """Keys for COS segment FUVA rawtags
+    
+    Parameters
+    ----------
+    file_result: tuple
+        A tuple with a path and filename
+    
+    """
+
     file_path = os.path.join(file_result.path, file_result.filename)
     with fits.open(file_path) as hdu:
             keywords = {'filename': file_result.filename,
@@ -132,6 +168,15 @@ def fuva_raw_keys(file_result):
 #-------------------------------------------------------------------------------
 
 def fuvb_raw_keys(file_result):
+    """Keys for COS segment FUVB rawtags
+    
+    Parameters
+    ----------
+    file_result: tuple
+        A tuple with a path and filename
+    
+    """
+
     file_path = os.path.join(file_result.path, file_result.filename)
     with fits.open(file_path) as hdu:
             keywords = {'filename': file_result.filename,
@@ -149,6 +194,15 @@ def fuvb_raw_keys(file_result):
 #-------------------------------------------------------------------------------
 
 def fuva_corr_keys(file_result):
+    """Keys for COS segment FUVA corrtags
+    
+    Parameters
+    ----------
+    file_result: tuple
+        A tuple with a path and filename
+    
+    """
+
     file_path = os.path.join(file_result.path, file_result.filename)
     with fits.open(file_path) as hdu:
             keywords = {'filename': file_result.filename,
@@ -167,6 +221,15 @@ def fuva_corr_keys(file_result):
 #-------------------------------------------------------------------------------
 
 def fuvb_corr_keys(file_result):
+    """Keys for COS segment FUVB corrtags
+    
+    Parameters
+    ----------
+    file_result: tuple
+        A tuple with a path and filename
+    
+    """
+
     file_path = os.path.join(file_result.path, file_result.filename)
     with fits.open(file_path) as hdu:
             keywords = {'filename': file_result.filename,
@@ -185,6 +248,15 @@ def fuvb_corr_keys(file_result):
 #-------------------------------------------------------------------------------
 
 def obs_keys(file_result):
+    """Keys for observations
+    
+    Parameters
+    ----------
+    file_result: tuple
+        A tuple with a path and filename
+    
+    """
+
     file_path = os.path.join(file_result.path, file_result.filename)
     with fits.open(file_path) as hdu:
             keywords = {'path': file_result.path,
@@ -196,9 +268,18 @@ def obs_keys(file_result):
 
 #-------------------------------------------------------------------------------
 
-def file_keys(file_tuple):
+def file_keys(file_result):
+    """Keys and tests for all data entering the system. This is so we can track 
+    data files that have no data in them as well as avoid ingesting them into any
+    monitoring tables.
     
-    path, filename = file_tuple
+    Parameters
+    ----------
+    file_result: tuple
+        A tuple with a path and filename
+    
+    """
+    path, filename = file_result
     
     try:
         #-- Set hard keys...
