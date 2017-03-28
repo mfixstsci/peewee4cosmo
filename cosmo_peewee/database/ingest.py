@@ -37,6 +37,7 @@ from ..dark.monitor import pull_orbital_info
 #-------------------------------------------------------------------------------
 
 def bulk_insert(table, data_source):
+    
     """ Ingest data into database
 
     Parameters
@@ -51,12 +52,13 @@ def bulk_insert(table, data_source):
     None
     
     """
-    
-    database = get_database()
-    database.connect()
+
 
     #-- Convert itertools.chain object to list...
     data_source = list(data_source)
+
+    database = get_database()
+    database.connect()
 
     try:
         with database.atomic():
@@ -110,6 +112,7 @@ def pull_data(file_result, function):
 #-------------------------------------------------------------------------------
 
 def bulk_delete(all_files):
+    
     """
     This function is a temporary fix for /smov/cos/Data/. Since the 'date-string'
     in the file path changes, the database will try to ingest the same files. The
@@ -156,6 +159,7 @@ def bulk_delete(all_files):
 #-------------------------------------------------------------------------------
 
 def setup_logging():
+    
     """
     Set up logging....
 
@@ -168,6 +172,7 @@ def setup_logging():
     None
 
     """
+    
     #-- create the logging file handler
     logging.basicConfig(filename="cosmos_monitors.log",
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -183,6 +188,7 @@ def setup_logging():
 #-------------------------------------------------------------------------------
 
 def populate_files(settings):
+    
     """
     Populate paths and files from filesystem.
     
@@ -231,6 +237,7 @@ def populate_files(settings):
 #-------------------------------------------------------------------------------
 
 def populate_observations(num_cpu=2):
+    
     """Populate table with observations. This seperates files that the 
     monitors use from telemetry/MAST created files like .jit, .jif, cci's, etc.
 
@@ -281,6 +288,7 @@ def populate_observations(num_cpu=2):
 #-------------------------------------------------------------------------------
 
 def populate_tables(table, table_keys, search_str, num_cpu=2):
+    
     """Parse data from different modes to proper tables. 
 
     Parameters
@@ -363,6 +371,7 @@ def populate_tables(table, table_keys, search_str, num_cpu=2):
 
 #-------------------------------------------------------------------------------
 def populate_osm(num_cpu=2):
+    
     """ Populate the OSM table
     
     Parameters
@@ -375,6 +384,7 @@ def populate_osm(num_cpu=2):
     None
 
     """
+    
     database = get_database()
     database.connect()
 
@@ -398,6 +408,7 @@ def populate_osm(num_cpu=2):
 
 #-------------------------------------------------------------------------------
 def populate_acqs(num_cpu=2):
+    
     """ Populate the rawacqs table
     
     Parameters
@@ -436,6 +447,7 @@ def populate_acqs(num_cpu=2):
 #-------------------------------------------------------------------------------
 
 def populate_darks(num_cpu=2):
+    
     """ Populate the dark table
     
     Parameters
@@ -448,6 +460,7 @@ def populate_darks(num_cpu=2):
     None
 
     """
+    
     database = get_database()
     database.connect()
 
@@ -473,6 +486,7 @@ def populate_darks(num_cpu=2):
 #-------------------------------------------------------------------------------
 
 def populate_stims(num_cpu=2):
+    
     """ Populate the stim pulse table
     
     None of the monitoring code has been integrated into the system yet.
@@ -513,6 +527,7 @@ def populate_stims(num_cpu=2):
 #-------------------------------------------------------------------------------
 
 def ingest_all():
+   
     """Create tables and run all ingestion scripts
     
     Parameters
