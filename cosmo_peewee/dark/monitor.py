@@ -21,6 +21,7 @@ from calcos.timeline import gmst, ASECtoRAD, DEGtoRAD, eqSun, DIST_SUN, RADIUS_E
 
 from .solar import get_solar_data
 from .plotting import plot_histogram, plot_time, plot_orbital_rate
+from .interactive_plots import plot_time as interactive_plot_time
 
 from ..utils import corrtag_image
 from ..database.models import get_settings, get_database
@@ -347,6 +348,11 @@ def make_plots(detector, base_dir, TA=False):
         if not os.path.exists(os.path.split(outname)[0]):
             os.makedirs(os.path.split(outname)[0])
         plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
+
+        logger.debug('creating interactive plot for {}:{}'.format(segment, key))
+        #-- Interactive plots
+        outname = os.path.join(settings['interactive_dir'], detector, '{}_vs_time_{}.html'.format(dark_key, segment))
+        interactive_plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
 
         #-- Plot vs orbit
         logger.debug('creating orbit plot for {}:{}'.format(segment, key))

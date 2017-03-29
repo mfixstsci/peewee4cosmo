@@ -1,5 +1,18 @@
-# Entrance Page Test
+# COS Monitoring Effort
+---
 
-I am trying to test adding a bokeh figure to a gitpages repo using [this example](https://automating-gis-processes.github.io/2016/Lesson5-share-on-github.html)
+Different calibration proposals are exectued each cycle to monitor the behavior for both the far ultraviolet and near ultraviolet modes. The COS team uses these calibration data and extract telemetry information from GO data to monitor the stablity and performace of the instrument.
 
-[Link to test plot](https://mfixstsci.github.io/peewee4cosmo/lines.html)
+## Monitor Example 1
+---
+
+The purpose of this example monitor is track the shifts, tempertures, drifts, etc for this specific mode. Here are some more things that the monitor will do and a figure can be seen below.
+
+[Mode Figure](file:///user/mfix/test.html)
+
+## Monitor Example 2
+---
+
+The purpose of this example monitor is track the shifts, tempertures, drifts, etc for this specific mode. Here are some more things that the monitor will do and a figure can be seen below.
+
+[Mode Figure](https://mfixstsci.github.io/peewee4cosmo/lines.html)
