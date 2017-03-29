@@ -8,7 +8,7 @@ Different calibration proposals are exectued each cycle to monitor the behavior 
 
 The purpose of this example monitor is track the shifts, tempertures, drifts, etc for this specific mode. Here are some more things that the monitor will do and a figure can be seen below.
 
-[Mode Figure](file:///user/mfix/test.html)
+[Mode Figure](https://mfixstsci.github.io/peewee4cosmo/lines.html)
 
 ## Monitor Example 2
 ---
