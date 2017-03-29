@@ -2,4 +2,6 @@
 
 I am trying to test adding a bokeh figure to a gitpages repo using: https://automating-gis-processes.github.io/2016/Lesson5-share-on-github.html
 
+https://mfixstsci.github.io/peewee4cosmo/lines.html
+
 [Link to test plot](https://mfixstsci.github.io/peewee4cosmo/lines.html)
