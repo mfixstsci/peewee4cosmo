@@ -54,17 +54,13 @@ def bulk_insert(table, data_source):
     """
 
 
-    #-- Convert itertools.chain object to list...
-    data_source = list(data_source)
-
     database = get_database()
     database.connect()
 
     try:
         with database.atomic():
             #-- Only add 100 files at a time....
-            for idx in range(0, len(data_source), 100):
-                table.insert_many(data_source[idx:idx+100]).execute()
+            table.insert_many(data_source).execute()
 
     #-- Lots of multiples, hopefully will be fixed with new filesystem implimentation.   
     except IntegrityError as e:
@@ -231,8 +227,9 @@ def populate_files(settings):
     data_to_insert = pool.map(partial, files_to_add)    
         
     if len(data_to_insert):
-        #-- Pass to bulk insert.    
-        bulk_insert(Files, itertools.chain(*data_to_insert))
+        #-- Pass to bulk insert.
+        for idx in range(0, len(list(data_to_insert)), 100):    
+            bulk_insert(Files, itertools.chain(*data_to_insert[idx:idx+100]))
 
 #-------------------------------------------------------------------------------
 
