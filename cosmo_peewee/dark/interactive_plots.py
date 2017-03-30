@@ -64,7 +64,7 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
     #-- Begin Bokeh   
     s1 = figure(width=plt_wth, height=plt_hgt, title='{} Global Dark Rate as of {}'.format(detector, strftime("%m-%d-%Y %H:%M:%S", gmtime())))
     s1.title.text_font_size = '15pt'
-    s1.circle(date, dark, size=8, color="black", alpha=0.5)
+    s1.circle(date, dark, legend='Dark Count Rate',size=8, color="black", alpha=0.5)
     s1.yaxis.axis_label = "Mean Dark Rate (cnts/pix/sec)"
 
     #-- Plot NUV
@@ -75,8 +75,8 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
 
         #-- Plot Solar Flux
         s2 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None)
-        s2.line(solar_date, solar, color='gold', line_width=2)
-        s2.line(solar_date[:-41], solar_smooth[:-41], color='red', line_width=3)
+        s2.line(solar_date, solar, legend='10.7 cm', color='gold', line_width=2)
+        s2.line(solar_date[:-41], solar_smooth[:-41], legend='10.7 cm smoothed', color='red', line_width=3)
         s2.yaxis.axis_label = "Radio Flux"
         s2.yaxis.axis_label_text_font_size = "15pt"
 
@@ -102,15 +102,15 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
 
         #-- Plot Solar Flux
         s2 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None)
-        s2.line(solar_date, solar, color='gold', line_width=2)
-        s2.line(solar_date[:-41], solar_smooth[:-41], color='red', line_width=3)
+        s2.line(solar_date, solar, legend='10.7 cm', color='gold', line_width=2)
+        s2.line(solar_date[:-41], solar_smooth[:-41], legend='10.7 cm smoothed', color='red', line_width=3)
         s2.yaxis.axis_label = "Radio Flux"
         s2.xaxis.axis_label = "Decimal Year"
         s2.xaxis.axis_label_text_font_size = "15pt"
         s2.yaxis.axis_label_text_font_size = "15pt"
 
         p = column(s1, s2)
-    
+
     #-- Save file
     output_file(outname)
 #-------------------------------------------------------------------------------
