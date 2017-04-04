@@ -29,6 +29,8 @@ from ..database.models import Darks
 
 from sqlalchemy.sql.functions import concat
 
+from copy import deepcopy
+
 #-------------------------------------------------------------------------------
 
 def get_sun_loc(mjd, full_path):
@@ -157,6 +159,7 @@ def pull_orbital_info(data_object, step=25):
         segment = hdu[0].header['segment']
     except KeyError:
         logger.debug("no timeline extension found for: {}".format(full_path))
+        print(info)
         yield info
         raise StopIteration
 
@@ -201,6 +204,7 @@ def pull_orbital_info(data_object, step=25):
     if not len(times):
         logger.debug("time array empty for: {}".format(full_path))
         blank = np.array([0])
+        print(info)
         yield info
         raise StopIteration
 
@@ -217,7 +221,7 @@ def pull_orbital_info(data_object, step=25):
                         (events['YCORR'] > ylim[0]) &
                         (events['YCORR'] < ylim[1]))
 
-
+    
     counts = np.histogram(events[filtered_index]['time'], bins=times)[0]
     ta_counts = np.histogram(events[ta_index]['time'], bins=times)[0]
 
@@ -239,7 +243,7 @@ def pull_orbital_info(data_object, step=25):
         yield info
     else:
         for i in range(len(counts)):
-            ### - better solution than round?
+            #-- better solution than round?
             info['date'] = round(decyear[i], 3)
             info['dark'] = round(counts[i], 7)
             info['ta_dark'] = round(ta_counts[i], 7)
@@ -248,7 +252,7 @@ def pull_orbital_info(data_object, step=25):
             info['sun_lat'] = round(sun_lat[i], 7)
             info['sun_lon'] = round(sun_lon[i], 7)
 
-            yield info
+            yield deepcopy(info)
 
 #-------------------------------------------------------------------------------
 
@@ -322,12 +326,20 @@ def make_plots(detector, base_dir, TA=False):
         logger.debug('creating time plot for {}:{}'.format(segment, key))
         
         #-- Query for data here!
-        data = Darks.select().where((Darks.detector == segment))
+        data = Darks.select().where(Darks.detector == segment)
         
         data = [row for row in data]
-
+        
         mjd = np.array([item.date for item in data])
-        dark = np.array([item.dark for item in data])
+        
+        #-- Parse whether you want to plot dark monitoring or targacq dark.
+        
+        if TA:
+            dark_key = 'ta_dark'
+            dark = np.array([item.ta_dark for item in data])
+        else:
+            dark = np.array([item.dark for item in data])
+        
         temp = np.array([item.temp for item in data])
         latitude = np.array([item.latitude for item in data])
         longitude = np.array([item.longitude for item in data])
@@ -339,20 +351,21 @@ def make_plots(detector, base_dir, TA=False):
         latitude = latitude[index]
         longitude = longitude[index]
 
+
         index_keep = np.where((longitude < 250) | (latitude > 10))[0]
         mjd = mjd[index_keep]
         dark = dark[index_keep]
         temp = temp[index_keep]
+        
+        logger.debug('creating interactive plot for {}:{}'.format(segment, key))
+        #-- Interactive plots
+        outname = os.path.join(settings['interactive_dir'], '{}_vs_time_{}.html'.format(dark_key, segment))
+        interactive_plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
 
         outname = os.path.join(base_dir, detector, '{}_vs_time_{}.png'.format(dark_key, segment))
         if not os.path.exists(os.path.split(outname)[0]):
             os.makedirs(os.path.split(outname)[0])
         plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
-
-        logger.debug('creating interactive plot for {}:{}'.format(segment, key))
-        #-- Interactive plots
-        outname = os.path.join(settings['interactive_dir'], detector, '{}_vs_time_{}.html'.format(dark_key, segment))
-        interactive_plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
 
         #-- Plot vs orbit
         logger.debug('creating orbit plot for {}:{}'.format(segment, key))
@@ -361,7 +374,12 @@ def make_plots(detector, base_dir, TA=False):
     
         data = [row for row in data]
 
-        dark = np.array([item.dark for item in data])
+        if TA:
+            dark_key = 'ta_dark'
+            dark = np.array([item.ta_dark for item in data])
+        else:
+            dark = np.array([item.dark for item in data])
+
         latitude = np.array([item.latitude for item in data])
         longitude = np.array([item.longitude for item in data])
         sun_lat = np.array([item.sun_lat for item in data])
@@ -381,11 +399,16 @@ def make_plots(detector, base_dir, TA=False):
         #-- Plot histogram of darkrates
         logger.debug('creating histogram plot for {}:{}'.format(segment, key))
         
-        data = Darks.select().where(Darks.detector==segment)
+        data = Darks.select().where(Darks.detector==segment) 
         
         data = [item for item in data]
 
-        dark = np.array([item.dark for item in data])
+        if TA:
+            dark_key = 'ta_dark'
+            dark = np.array([item.ta_dark for item in data])
+        else:
+            dark = np.array([item.dark for item in data])
+
         date = np.array([item.date for item in data])
 
         index = np.argsort(date)
@@ -393,7 +416,6 @@ def make_plots(detector, base_dir, TA=False):
         dark = dark[index]
 
         for year in set(map(int, date)):
-
             if year == 0:
                 continue
             else:

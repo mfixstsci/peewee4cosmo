@@ -90,7 +90,6 @@ class Observations(BaseModel):
     filename = CharField(primary_key=True)
     targname = CharField()
     rootname = CharField()
-    monitor_flag = BooleanField()
   
     class Meta:
         db_table = 'observations'  
@@ -377,16 +376,16 @@ class Rawacqs(BaseModel):
 class Darks(BaseModel):
     """Record dark rate"""
     
-    rootname = CharField()
-    detector = CharField()
-    date = FloatField()
-    dark = FloatField()
-    ta_dark = FloatField()
-    latitude = FloatField()
-    longitude = FloatField()
-    sun_lat = FloatField()
-    sun_lon = FloatField()
-    temp = FloatField()
+    rootname = CharField(default='N/A')
+    detector = CharField(default='N/A')
+    date = FloatField(default=0.0)
+    dark = FloatField(default=0.0)
+    ta_dark = FloatField(default=0.0)
+    latitude = FloatField(default=0.0)
+    longitude = FloatField(default=0.0)
+    sun_lat = FloatField(default=0.0)
+    sun_lon = FloatField(default=0.0)
+    temp = FloatField(default=0.0)
 
     filename = ForeignKeyField(Observations,
                                db_column='filename',

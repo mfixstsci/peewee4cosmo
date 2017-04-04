@@ -2,9 +2,10 @@
 Interactive plotting for Dark monitor
 """
 
-from bokeh.io import output_file, show
+from bokeh.io import output_file, show, save
 from bokeh.layouts import column
 from bokeh.plotting import figure
+from bokeh.models import Range1d
 
 import scipy
 from scipy.ndimage.filters import convolve
@@ -36,7 +37,7 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
     outname : str
         path + name of output plot
     """
-    
+
     #-- Check and then remove if file exists.
     #remove_if_there(outname)
 
@@ -61,10 +62,13 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
         plt_wth = 800
 
     
+    #-- Save static HTML file
+    output_file(outname)
+
     #-- Begin Bokeh   
-    s1 = figure(width=plt_wth, height=plt_hgt, title='{} Global Dark Rate as of {}'.format(detector, strftime("%m-%d-%Y %H:%M:%S", gmtime())))
+    s1 = figure(width=plt_wth, height=plt_hgt, x_range=(2009, max(date) + 0.5), title='{} Global Dark Rate as of {}'.format(detector, strftime("%m-%d-%Y %H:%M:%S", gmtime())))
     s1.title.text_font_size = '15pt'
-    s1.circle(date, dark, legend='Dark Count Rate',size=8, color="black", alpha=0.5)
+    s1.circle(date, dark, legend='Dark Count Rate',size=4, color="black", alpha=0.5)
     s1.yaxis.axis_label = "Mean Dark Rate (cnts/pix/sec)"
 
     #-- Plot NUV
@@ -82,7 +86,7 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
 
         #-- Plot Temperture
         s3 = figure(width=plt_wth, plot_height=plt_hgt, x_range=s1.x_range, title=None)
-        s3.circle(date, temp, size=8, color="red", alpha=0.5)
+        s3.circle(date, temp, size=4, color="red", alpha=0.5)
         s3.xaxis.axis_label = "Decimal Year"
         s3.yaxis.axis_label = "Temperture"
         
@@ -111,6 +115,5 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
 
         p = column(s1, s2)
 
-    #-- Save file
-    output_file(outname)
+    save(p, filename=outname)
 #-------------------------------------------------------------------------------

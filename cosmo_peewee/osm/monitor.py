@@ -28,6 +28,7 @@ from ..database.models import get_database, get_settings
 from ..database.models import Lampflash, Rawacqs, Files
 from ..utils import remove_if_there
 
+from copy import deepcopy
 #-------------------------------------------------------------------------------
 
 def fppos_shift(lamptab_name, segment, opt_elem, cenwave, fpoffset):
@@ -106,34 +107,24 @@ def pull_flashes(filename):
             #-- FPPOS 3 is the home frame, so put all FP's in home frame.
             fpoffset = out_info['fppos'] - 3
 
-            if not len(hdu[1].data):
-                #-- If there is no data, update the monitor_flag and exit.
-                database = get_database()
-                database.connect()
-                Files.update(monitor_flag=False).where(Files.filename == filename.filename).execute()
-                database.close()
-                sys.exit()
-            else:
-                for i, line in enumerate(hdu[1].data):
-                    
-                    #-- Count the number of flashes and set dictionary values.
-                    out_info['flash'] = (i // 2) + 1
-                    out_info['x_shift'] = line['SHIFT_DISP'] - fppos_shift(out_info['lamptab'],
-                                                                            line['segment'],
-                                                                            out_info['opt_elem'],
-                                                                            out_info['cenwave'],
-                                                                            fpoffset)
+            for i, line in enumerate(hdu[1].data):
+                #-- Count the number of flashes and set dictionary values.
+                out_info['flash'] = (i // 2) + 1
+                out_info['x_shift'] = line['SHIFT_DISP'] - fppos_shift(out_info['lamptab'],
+                                                                        line['segment'],
+                                                                        out_info['opt_elem'],
+                                                                        out_info['cenwave'],
+                                                                        fpoffset)
 
-                    out_info['y_shift'] = line['SHIFT_XDISP']
-                    out_info['found'] = line['SPEC_FOUND']
-                    out_info['segment'] = line['SEGMENT']
+                out_info['y_shift'] = line['SHIFT_XDISP']
+                out_info['found'] = line['SPEC_FOUND']
+                out_info['segment'] = line['SEGMENT']
 
-                    #-- don't need too much precision here
-                    out_info['x_shift'] = round(out_info['x_shift'], 5)
-                    out_info['y_shift'] = round(out_info['y_shift'], 5)
+                #-- don't need too much precision here
+                out_info['x_shift'] = round(out_info['x_shift'], 5)
+                out_info['y_shift'] = round(out_info['y_shift'], 5)
 
-                    #yield out_info
-                    yield out_info
+                yield deepcopy(out_info)
         
         #-- Open rawacqs
         elif '_rawacq.fits' in filename.filename:
@@ -154,9 +145,9 @@ def pull_flashes(filename):
                 out_info['x_shift'] = 1023 - spt[1].header['LQTAYCOR']
                 out_info['y_shift'] = 1023 - spt[1].header['LQTAXCOR']
 
-            yield out_info
+            yield deepcopy(out_info)
         else:
-            yield out_info
+            yield deepcopy(out_info)
 
 #-------------------------------------------------------------------------------
 
@@ -555,6 +546,8 @@ def make_plots(data, data_acqs, out_dir):
         plt.close(fig)
         os.chmod(os.path.join(out_dir, '%s_shifts_color.pdf' %
                     (grating)), 0o766)
+
+#----------------------------------------------------------
 
 #----------------------------------------------------------
 

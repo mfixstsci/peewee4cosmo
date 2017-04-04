@@ -51,6 +51,7 @@ def nuv_raw_keys(file_result):
                         'exptime': hdu[1].header['exptime'],
                         'nevents': hdu[1].header['nevents']
                         }
+    print(keywords)
     return keywords
 
 #-------------------------------------------------------------------------------
@@ -89,6 +90,7 @@ def nuv_corr_keys(file_result):
                         'sp_hgt_c': hdu[1].header['sp_hgt_c'],
                         'exptime': hdu[1].header['exptime']
                         }
+    print(keywords)
     return keywords
 
 #-------------------------------------------------------------------------------
@@ -137,6 +139,7 @@ def fuv_primary_keys(file_result):
                         'asn_id': hdu[0].header['asn_id'],
                         'asn_mtyp': hdu[1].header['asn_mtyp']
                         }
+    print(keywords)
     return keywords
     
 #-------------------------------------------------------------------------------
@@ -163,6 +166,7 @@ def fuva_raw_keys(file_result):
                         'feventa': hdu[1].header['feventa'],
                         'hvlevela': hdu[1].header['hvlevela']
                         }
+    print(keywords)
     return keywords
 
 #-------------------------------------------------------------------------------
@@ -189,6 +193,7 @@ def fuvb_raw_keys(file_result):
                         'feventb': hdu[1].header['feventb'],
                         'hvlevelb': hdu[1].header['hvlevelb']
                         }
+    print(keywords)
     return keywords
 
 #-------------------------------------------------------------------------------
@@ -216,6 +221,7 @@ def fuva_corr_keys(file_result):
                         'sp_hgt_a': hdu[1].header['sp_hgt_a'],
                         'exptime': hdu[1].header['exptime']
                         }
+    print(keywords)
     return keywords
 
 #-------------------------------------------------------------------------------
@@ -243,6 +249,7 @@ def fuvb_corr_keys(file_result):
                         'sp_hgt_b': hdu[1].header['sp_hgt_b'],
                         'exptime': hdu[1].header['exptime']
                         }
+    print(keywords)
     return keywords
 
 #-------------------------------------------------------------------------------
@@ -264,6 +271,7 @@ def obs_keys(file_result):
                         'filename': file_result.filename,
                         'targname': hdu[0].header['targname'],
                         }
+    print(keywords)
     return keywords
 
 #-------------------------------------------------------------------------------
@@ -298,6 +306,7 @@ def file_keys(file_result):
     except (IOError, TypeError, ValueError) as e:
         keywords['monitor_flag'] = False
     
+    print(keywords)
     #print(keywords)
     return keywords 
 

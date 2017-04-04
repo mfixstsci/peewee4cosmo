@@ -59,20 +59,21 @@ def bulk_insert(table, data_source):
 
     try:
         with database.atomic():
-            #-- Only add 100 files at a time....
             table.insert_many(data_source).execute()
-
+        database.close()
     #-- Lots of multiples, hopefully will be fixed with new filesystem implimentation.   
     except IntegrityError as e:
         print('IntegrityError:', e)
+        database.close()
     except IOError as e:
         print('IOError:',  e)
+        database.close()
     except OperationalError as e:
         print('OperationalError', e)
+        database.close()
     except InternalError as e:
         print('InternalError', e)
-
-    database.close()
+        database.close()
 #-------------------------------------------------------------------------------
 
 def pull_data(file_result, function):
@@ -568,46 +569,46 @@ def ingest_all():
     
     #-- Files
     logger.info("Ingesting Files from {}".format(settings['data_location']))
-    populate_files(settings)
+    #populate_files(settings)
 
     #-- Observation table    
-    # logger.info("Populating observations table.")
-    # populate_observations(settings['num_cpu'])
+    logger.info("Populating observations table.")
+    populate_observations(settings['num_cpu'])
 
-    # #-- NUV rawtag headers    
-    # logger.info("Populating NUV rawtag headers.")
-    # populate_tables(NUV_raw_headers, nuv_raw_keys, '%_rawtag.fits.gz%', settings['num_cpu'])
+    #-- NUV rawtag headers    
+    logger.info("Populating NUV rawtag headers.")
+    populate_tables(NUV_raw_headers, nuv_raw_keys, '%_rawtag.fits.gz%', settings['num_cpu'])
 
-    # #-- NUV corrtag headers    
-    # logger.info("Populating NUV corrtag headers.")
-    # opulate_tables(NUV_corr_headers, nuv_corr_keys, '%_corrtag.fits.gz%', settings['num_cpu'])
+    #-- NUV corrtag headers    
+    logger.info("Populating NUV corrtag headers.")
+    populate_tables(NUV_corr_headers, nuv_corr_keys, '%_corrtag.fits.gz%', settings['num_cpu'])
 
-    # #-- FUV primary headers    
-    # logger.info("Populating FUV primary headers.")
-    # populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
-    # populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
+    #-- FUV primary headers    
+    logger.info("Populating FUV primary headers.")
+    populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
+    populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
-    # #-- FUV rawtag headers    
-    # logger.info("Populating FUV rawtag headers.")
-    # populate_tables(FUVA_raw_headers, fuva_raw_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
-    # populate_tables(FUVB_raw_headers, fuvb_raw_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
+    #-- FUV rawtag headers    
+    logger.info("Populating FUV rawtag headers.")
+    populate_tables(FUVA_raw_headers, fuva_raw_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
+    populate_tables(FUVB_raw_headers, fuvb_raw_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
-    # #-- FUV corrtag headers    
-    # logger.info("Populating FUV corrtag headers.")
-    # populate_tables(FUVA_corr_headers, fuva_corr_keys, '%corrtag_a.fits.gz%', settings['num_cpu'])
-    # populate_tables(FUVB_corr_headers, fuvb_corr_keys, '%corrtag_b.fits.gz%', settings['num_cpu'])
+    #-- FUV corrtag headers    
+    logger.info("Populating FUV corrtag headers.")
+    populate_tables(FUVA_corr_headers, fuva_corr_keys, '%corrtag_a.fits.gz%', settings['num_cpu'])
+    populate_tables(FUVB_corr_headers, fuvb_corr_keys, '%corrtag_b.fits.gz%', settings['num_cpu'])
 
-    # #-- Populate rawacq monitor meta
-    # logger.info("Populating Rawacqs Table")
-    # populate_acqs(settings['num_cpu'])
+    #-- Populate rawacq monitor meta
+    logger.info("Populating Rawacqs Table")
+    populate_acqs(settings['num_cpu'])
 
-    # #-- Populate OSM monitor metadata
-    # logger.info("Populating OSM Shift Table")
-    # populate_osm(settings['num_cpu'])
+    #-- Populate OSM monitor metadata
+    logger.info("Populating OSM Shift Table")
+    populate_osm(settings['num_cpu'])
 
-    # #-- Populate Darks monitor meta
-    # logger.info("Populating Darks Table")
-    # populate_darks(settings['num_cpu'])
+    #-- Populate Darks monitor meta
+    logger.info("Populating Darks Table")
+    populate_darks(settings['num_cpu'])
     
 #-------------------------------------------------------------------------------
 
@@ -624,7 +625,7 @@ def run_monitors():
     
     """
     
-    osm_monitor()
+    #osm_monitor()
     dark_monitor()
 
 #-------------------------------------------------------------------------------
