@@ -4,8 +4,8 @@ Interactive plotting for Dark monitor
 
 from bokeh.io import output_file, show, save
 from bokeh.layouts import column
-from bokeh.plotting import figure
-from bokeh.models import Range1d
+from bokeh.plotting import figure, ColumnDataSource
+from bokeh.models import Range1d, HoverTool, BoxSelectTool
 
 import scipy
 from scipy.ndimage.filters import convolve
@@ -19,6 +19,7 @@ from time import gmtime, strftime
 #-------------------------------------------------------------------------------
 
 def plot_time(detector, dark, date, temp, solar, solar_date, outname):
+    print(len(dark), len(date), len(temp), len(solar), len(solar_date))
     """Plot the dar-rate vs time
     Parameters
     ----------
@@ -65,8 +66,13 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
     #-- Save static HTML file
     output_file(outname)
 
+
     #-- Begin Bokeh   
-    s1 = figure(width=plt_wth, height=plt_hgt, x_range=(2009, max(date) + 0.5), title='{} Global Dark Rate as of {}'.format(detector, strftime("%m-%d-%Y %H:%M:%S", gmtime())))
+    
+    TOOLS ='box_zoom,box_select,crosshair,pan,reset,hover'
+    
+    s1 = figure(width=plt_wth, height=plt_hgt, x_range=(2009, max(date) + 0.5), title='{} Global Dark Rate as of {}'.format(detector, strftime("%m-%d-%Y %H:%M:%S", gmtime())), tools=TOOLS)
+    s1.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Dark Rate":"$y"}
     s1.title.text_font_size = '15pt'
     s1.circle(date, dark, legend='Dark Count Rate',size=4, color="black", alpha=0.5)
     s1.yaxis.axis_label = "Mean Dark Rate (cnts/pix/sec)"
@@ -78,14 +84,17 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
         solar_smooth = scipy.convolve(solar, np.ones(81) / 81.0, mode='same')
 
         #-- Plot Solar Flux
-        s2 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None)
+        s2 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
+        s2.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Solar Flux":"$y"}
         s2.line(solar_date, solar, legend='10.7 cm', color='gold', line_width=2)
         s2.line(solar_date[:-41], solar_smooth[:-41], legend='10.7 cm smoothed', color='red', line_width=3)
         s2.yaxis.axis_label = "Radio Flux"
         s2.yaxis.axis_label_text_font_size = "15pt"
 
+        
         #-- Plot Temperture
-        s3 = figure(width=plt_wth, plot_height=plt_hgt, x_range=s1.x_range, title=None)
+        s3 = figure(width=plt_wth, plot_height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
+        s3.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Temperture":"$y"}
         s3.circle(date, temp, size=4, color="red", alpha=0.5)
         s3.xaxis.axis_label = "Decimal Year"
         s3.yaxis.axis_label = "Temperture"
@@ -105,7 +114,8 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
         solar_smooth = scipy.convolve(solar, np.ones(81) / 81.0, mode='same')
 
         #-- Plot Solar Flux
-        s2 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None)
+        s2 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
+        s2.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Solar Flux":"$y"}
         s2.line(solar_date, solar, legend='10.7 cm', color='gold', line_width=2)
         s2.line(solar_date[:-41], solar_smooth[:-41], legend='10.7 cm smoothed', color='red', line_width=3)
         s2.yaxis.axis_label = "Radio Flux"

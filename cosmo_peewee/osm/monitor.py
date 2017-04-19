@@ -23,12 +23,18 @@ from datetime import datetime
 
 from astropy.io import fits
 from astropy.table import Table
+from time import gmtime, strftime
 
 from ..database.models import get_database, get_settings
 from ..database.models import Lampflash, Rawacqs, Files
 from ..utils import remove_if_there
 
 from copy import deepcopy
+
+from bokeh.io import output_file, show, save
+from bokeh.layouts import column, gridplot
+from bokeh.plotting import figure, ColumnDataSource
+from bokeh.models import Range1d, HoverTool, BoxSelectTool
 #-------------------------------------------------------------------------------
 
 def fppos_shift(lamptab_name, segment, opt_elem, cenwave, fpoffset):
@@ -217,6 +223,232 @@ def make_shift_table(db_table):
     data = Table(rows=data, names=keys)
     return data
 
+#-------------------------------------------------------------------------------
+def make_interactive_plots(data, data_acqs, out_dir, detector):
+    """Make interactive plots for OSM shifts  
+    
+    Parameter
+    ---------
+    data : Astropy Table
+        A table of lampflash metadata
+    data_acqs : Astropy Table
+        A table of rawacqs metadata
+    out_dir : str
+        The output directory for the files.
+    """
+
+    #-- Sort by time
+    sorted_index = np.argsort(data['date'])
+    
+    #-- Rearange Data
+    data = data[sorted_index]
+
+    if detector == 'FUV':
+        #-- Sort all data by opt_elem
+        G140L = np.where((data['opt_elem'] == 'G140L'))[0]
+        G130M = np.where((data['opt_elem'] == 'G130M'))[0]
+        G160M = np.where((data['opt_elem'] == 'G160M'))[0]
+        
+        #-- Begin Bokeh   
+        TOOLS ='box_zoom,box_select,crosshair,pan,reset,hover'
+        
+        #-- Plot FUV Shifts
+        outname = os.path.join(out_dir, 'FUV_shift_vs_time.html')
+        output_file(outname)
+        plt_hgt = 250
+        plt_wth = 800
+
+        s1 = figure(width=plt_wth, height=plt_hgt, x_range=(min(data['date']) - 10, max(data['date']) + 10), title='FUV SHIFT1[A/B] as of {}'.format(strftime("%m-%d-%Y %H:%M:%S", gmtime())), tools=TOOLS)
+        s1.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
+        s1.title.text_font_size = '15pt'
+        s1.circle(data['date'][G130M], data['x_shift'][G130M], legend='G130M',size=4, color="blue", alpha=0.5)
+        s1.yaxis.axis_label = "Shift1[A/B] (Pixels)"
+
+        s2 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
+        s2.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
+        s2.circle(data['date'][G160M], data['x_shift'][G160M], legend='G160M',size=4, color="green", alpha=0.5)
+
+        s3 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
+        s3.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
+        s3.circle(data['date'][G140L], data['x_shift'][G140L], legend='G140L',size=4, color="yellow", alpha=0.5)
+        s3.xaxis.axis_label = "Time (MJD)"
+
+        #-- Convient way of looping to set plotting axes and fitting lines etc...
+        for axis,index in zip([s1,s2,s3],[G130M,G160M,G140L]):
+            #-- Set ylabels
+            axis.yaxis.axis_label = "Shift1[A/B] (Pixels)"
+            
+            #-- Draw a line @ 0.
+            axis.line(data['date'][index], np.zeros_like(data['date'][index]), color='red', line_width=2)
+            
+            #-- Draw search boundary regions.
+            axis.line(data['date'][index], np.zeros_like(data['date'][index]) + 285, color='black', line_width=2, line_dash='dashed')
+            axis.line(data['date'][index], np.zeros_like(data['date'][index]) - 285, color='black', line_width=2, line_dash='dashed')
+            
+            #-- Fit shift as a function of date and plot it...
+            fit,ydata,parameters,err = fit_data(data['date'][index],data['x_shift'][index])
+            axis.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+
+        p = column(s1, s2, s3)
+
+        save(p, filename=outname)
+
+
+    #-- NUV Plots
+    if detector == 'NUV':
+        G230L = np.where((data['opt_elem'] == 'G230L'))[0]
+        G225M = np.where((data['opt_elem'] == 'G225M'))[0]
+        G285M = np.where((data['opt_elem'] == 'G285M'))[0]
+        G185M = np.where((data['opt_elem'] == 'G185M'))[0]
+        NUV = np.where((data['opt_elem'] == 'G230L') |
+                    (data['opt_elem'] == 'G185M') |
+                    (data['opt_elem'] == 'G225M') |
+                    (data['opt_elem'] == 'G285M'))[0]
+        mirrora = np.where((data_acqs['opt_elem'] == 'MIRRORA')
+                        & (data_acqs['x_shift'] > 0))[0]
+        mirrorb = np.where((data_acqs['opt_elem'] == 'MIRRORB')
+                        & (data_acqs['x_shift'] > 0))[0]
+        
+        #-- Bokeh
+        TOOLS ='box_zoom,pan,reset,hover'
+
+        plt_hgt = 250
+        plt_wth = 800
+
+        outname = os.path.join(out_dir, 'NUV_shift_vs_time.html')
+        output_file(outname)
+        
+        transition_date = 56500.0
+        transition_date_G230L = 55535.0        
+        
+        #-- Panel 1
+        s1 = figure(width=plt_wth, height=plt_hgt, x_range=(min(data['date']) - 10, max(data['date']) + 10), title='NUV SHIFT1[A/B/C] as of {}'.format(strftime("%m-%d-%Y %H:%M:%S", gmtime())), tools=TOOLS)
+        s1.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
+        s1.title.text_font_size = '15pt'
+        s1.circle(data['date'][G185M], data['x_shift'][G185M], legend='G185M',size=4, color="blue", alpha=0.5)
+        
+        s1.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
+        s1.line(data['date'][G185M], np.zeros_like(data['date'][G185M]), color='red', line_width=2)
+
+        fit,ydata,parameters,err = fit_data(data['date'][G185M],data['x_shift'][G185M])
+
+        before_data = np.where(data['date'][G185M] <= transition_date)
+        after_data = np.where(data['date'][G185M] >= transition_date)
+        s1.line(data['date'][G185M][before_data], np.zeros_like(data['date'][G185M][before_data]) + 58, color='black', line_width=2, line_dash='dashed')
+        s1.line(data['date'][G185M][before_data], np.zeros_like(data['date'][G185M][before_data]) - 58, color='black', line_width=2, line_dash='dashed')
+
+        s1.line(data['date'][G185M][after_data], np.zeros_like(data['date'][G185M][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
+        s1.line(data['date'][G185M][after_data], np.zeros_like(data['date'][G185M][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
+        
+        s1.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+        ############################
+
+        #-- Panel 2
+        s2 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
+        s2.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
+        s2.circle(data['date'][G225M], data['x_shift'][G225M], legend='G225M',size=4, color="red", alpha=0.5)
+        s2.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
+        s2.line(data['date'][G225M], np.zeros_like(data['date'][G225M]), color='red', line_width=2)
+
+        s2.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
+        s2.line(data['date'][G225M], np.zeros_like(data['date'][G225M]), color='red', line_width=2)
+
+        fit,ydata,parameters,err = fit_data(data['date'][G225M],data['x_shift'][G225M])
+
+        before_data = np.where(data['date'][G225M] <= transition_date)
+        after_data = np.where(data['date'][G225M] >= transition_date)
+        s2.line(data['date'][G225M][before_data], np.zeros_like(data['date'][G225M][before_data]) + 58, color='black', line_width=2, line_dash='dashed')
+        s2.line(data['date'][G225M][before_data], np.zeros_like(data['date'][G225M][before_data]) - 58, color='black', line_width=2, line_dash='dashed')
+
+        s2.line(data['date'][G225M][after_data], np.zeros_like(data['date'][G225M][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
+        s2.line(data['date'][G225M][after_data], np.zeros_like(data['date'][G225M][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
+        
+        s2.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+        ############################
+
+        #-- Panel 3
+        s3 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
+        s3.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
+        s3.circle(data['date'][G285M], data['x_shift'][G285M], legend='G285M',size=4, color="yellow", alpha=0.5)
+        s3.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
+        s3.line(data['date'][G285M], np.zeros_like(data['date'][G285M]), color='red', line_width=2)
+        
+        s3.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
+        s3.line(data['date'][G285M], np.zeros_like(data['date'][G285M]), color='red', line_width=2)
+
+        fit,ydata,parameters,err = fit_data(data['date'][G285M],data['x_shift'][G285M])
+
+        before_data = np.where(data['date'][G285M] <= transition_date)
+        after_data = np.where(data['date'][G285M] >= transition_date)
+        s3.line(data['date'][G285M][before_data], np.zeros_like(data['date'][G285M][before_data]) + 58, color='black', line_width=2, line_dash='dashed')
+        s3.line(data['date'][G285M][before_data], np.zeros_like(data['date'][G285M][before_data]) - 58, color='black', line_width=2, line_dash='dashed')
+
+        s3.line(data['date'][G285M][after_data], np.zeros_like(data['date'][G285M][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
+        s3.line(data['date'][G285M][after_data], np.zeros_like(data['date'][G285M][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
+        
+        s3.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+        ############################
+        
+        #-- Panel 4
+        s4 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
+        s4.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
+        s4.circle(data['date'][G230L], data['x_shift'][G230L], legend='G230L',size=4, color="green", alpha=0.5)
+        s4.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
+        s4.line(data['date'][G230L], np.zeros_like(data['date'][G230L]), color='red', line_width=2)
+
+        s4.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
+        s4.line(data['date'][G230L], np.zeros_like(data['date'][G230L]), color='red', line_width=2)
+
+        fit,ydata,parameters,err = fit_data(data['date'][G230L],data['x_shift'][G230L])
+
+        before_data = np.where(data['date'][G230L] <= transition_date_G230L)
+        after_data = np.where(data['date'][G230L] >= transition_date_G230L)
+        s4.line(data['date'][G230L][before_data], np.zeros_like(data['date'][G230L][before_data]) + 58, color='black', line_width=2, line_dash='dashed')
+        s4.line(data['date'][G230L][before_data], np.zeros_like(data['date'][G230L][before_data]) - 58, color='black', line_width=2, line_dash='dashed')
+
+        s4.line(data['date'][G230L][after_data], np.zeros_like(data['date'][G230L][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
+        s4.line(data['date'][G230L][after_data], np.zeros_like(data['date'][G230L][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
+        
+        s4.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+        ############################
+        
+        #-- Panel 5
+        s5 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
+        s5.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
+        s5.circle(data['date'][NUV], data['x_shift'][NUV], legend='ALL NUV',size=4, color="firebrick", alpha=0.5)
+        s5.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
+        s5.line(data['date'][NUV], np.zeros_like(data['date'][NUV]), color='red', line_width=2)
+        s5.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
+        s5.line(data['date'][NUV], np.zeros_like(data['date'][NUV]), color='red', line_width=2)
+
+        fit,ydata,parameters,err = fit_data(data['date'][NUV],data['x_shift'][NUV])
+
+        s5.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+        ############################
+        
+        s6 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
+        s6.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
+        s6.circle(data_acqs['date'][mirrora], data_acqs['x_shift'][mirrora], legend='Mirror A',size=4, color="firebrick", alpha=0.5)
+
+        s7 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
+        s7.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
+        s7.circle(data_acqs['date'][mirrorb], data_acqs['x_shift'][mirrorb], legend='Mirror B',size=4, color="firebrick", alpha=0.5)
+        s7.xaxis.axis_label = "Date (MJD)"
+
+        #-- Plotting for Mirror A and B.
+        for axis,index in zip([s6, s7],[mirrora, mirrorb]):
+            #-- Set ylabels
+            axis.yaxis.axis_label = "Shift1 (Pixels)"          
+            #-- Fit shift as a function of date and plot it...
+            fit,ydata,parameters,err = fit_data(data_acqs['date'][index],data_acqs['x_shift'][index])
+            axis.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+
+        p = column(s1, s2, s3, s4, s5, s6, s7)
+
+        save(p, filename=outname)
+        
+        # grid = gridplot([[s1, s2], [s3, s4], [s5,s6], [s7]])
+        # save(grid, filename=outname)
 #-------------------------------------------------------------------------------
 
 def make_plots(data, data_acqs, out_dir):
@@ -549,8 +781,6 @@ def make_plots(data, data_acqs, out_dir):
 
 #----------------------------------------------------------
 
-#----------------------------------------------------------
-
 def make_plots_2(data, data_acqs, out_dir):
     """ Making the plots for the shift2 value
     """
@@ -652,7 +882,7 @@ def monitor():
 
     webpage_dir = os.path.join(settings['webpage_location'], 'shifts')
     monitor_dir = os.path.join(settings['monitor_location'], 'Shifts')
-
+    interactive_dir = settings['interactive_dir']
     for place in [webpage_dir, monitor_dir]:
         if not os.path.exists(place):
             logger.debug("creating monitor location: {}".format(place))
@@ -663,14 +893,17 @@ def monitor():
     
     make_plots(flash_data, rawacq_data, monitor_dir)
     
-    #make_plots_2(flash_data, rawacq_data, monitor_dir)
+    make_interactive_plots(flash_data, rawacq_data, interactive_dir, 'FUV')
+    make_interactive_plots(flash_data, rawacq_data, interactive_dir, 'NUV')
+
+    # make_plots_2(flash_data, rawacq_data, monitor_dir)
     
-    #fp_diff(flash_data)
+    # fp_diff(flash_data)
 
-    for item in glob.glob(os.path.join(monitor_dir, '*.p??')):
-        remove_if_there(os.path.join(webpage_dir, os.path.basename(item)))
-        shutil.copy(item, webpage_dir)
+    # for item in glob.glob(os.path.join(monitor_dir, '*.p??')):
+    #     remove_if_there(os.path.join(webpage_dir, os.path.basename(item)))
+    #     shutil.copy(item, webpage_dir)
 
-    logger.info("finish monitor")
+    # logger.info("finish monitor")
 
 #----------------------------------------------------------
