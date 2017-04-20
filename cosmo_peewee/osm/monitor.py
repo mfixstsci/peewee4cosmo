@@ -27,6 +27,7 @@ from time import gmtime, strftime
 
 from ..database.models import get_database, get_settings
 from ..database.models import Lampflash, Rawacqs, Files
+
 from ..utils import remove_if_there
 
 from copy import deepcopy
@@ -235,7 +236,11 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         A table of rawacqs metadata
     out_dir : str
         The output directory for the files.
+    detector : str
+        FUV or NUV mode to make correct plot.
     """
+
+    logger.info("MAKING INTERACTIVE PLOT FOR {}".format(detector))
 
     #-- Sort by time
     sorted_index = np.argsort(data['date'])
@@ -255,23 +260,32 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         #-- Plot FUV Shifts
         outname = os.path.join(out_dir, 'FUV_shift_vs_time.html')
         output_file(outname)
+        
+        #-- Set panel size
         plt_hgt = 250
         plt_wth = 800
 
+        #-- Create bokeh figure objects
+        #-- Panel 1
         s1 = figure(width=plt_wth, height=plt_hgt, x_range=(min(data['date']) - 10, max(data['date']) + 10), title='FUV SHIFT1[A/B] as of {}'.format(strftime("%m-%d-%Y %H:%M:%S", gmtime())), tools=TOOLS)
         s1.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
         s1.title.text_font_size = '15pt'
         s1.circle(data['date'][G130M], data['x_shift'][G130M], legend='G130M',size=4, color="blue", alpha=0.5)
         s1.yaxis.axis_label = "Shift1[A/B] (Pixels)"
+        ############################
 
+        #-- Panel 2
         s2 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
         s2.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
         s2.circle(data['date'][G160M], data['x_shift'][G160M], legend='G160M',size=4, color="green", alpha=0.5)
+        ############################
 
+        #-- Panel 3
         s3 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
         s3.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
         s3.circle(data['date'][G140L], data['x_shift'][G140L], legend='G140L',size=4, color="yellow", alpha=0.5)
         s3.xaxis.axis_label = "Time (MJD)"
+        ############################
 
         #-- Convient way of looping to set plotting axes and fitting lines etc...
         for axis,index in zip([s1,s2,s3],[G130M,G160M,G140L]):
@@ -289,6 +303,7 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
             fit,ydata,parameters,err = fit_data(data['date'][index],data['x_shift'][index])
             axis.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
 
+        #-- Format figure into single column of panels
         p = column(s1, s2, s3)
 
         save(p, filename=outname)
@@ -312,16 +327,23 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         #-- Bokeh
         TOOLS ='box_zoom,pan,reset,hover'
 
+        #-- Bokeh panel sizes.
         plt_hgt = 250
         plt_wth = 800
 
+        #-- Set outname and create file.
         outname = os.path.join(out_dir, 'NUV_shift_vs_time.html')
         output_file(outname)
         
+        #-- G230L search range was updated earlier than the other observing modes.
         transition_date = 56500.0
         transition_date_G230L = 55535.0        
         
+
+        #-- Because of the complexity of the different transition dates, plotting with bokeh and acq figures... I've made code blocks for each panel. 
+        
         #-- Panel 1
+        #-- Create bokeh figure.
         s1 = figure(width=plt_wth, height=plt_hgt, x_range=(min(data['date']) - 10, max(data['date']) + 10), title='NUV SHIFT1[A/B/C] as of {}'.format(strftime("%m-%d-%Y %H:%M:%S", gmtime())), tools=TOOLS)
         s1.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
         s1.title.text_font_size = '15pt'
@@ -330,16 +352,22 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         s1.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
         s1.line(data['date'][G185M], np.zeros_like(data['date'][G185M]), color='red', line_width=2)
 
+        #-- Fit Data
         fit,ydata,parameters,err = fit_data(data['date'][G185M],data['x_shift'][G185M])
 
+        #-- Find transition regions.
         before_data = np.where(data['date'][G185M] <= transition_date)
         after_data = np.where(data['date'][G185M] >= transition_date)
+        
+        #-- First transitions
         s1.line(data['date'][G185M][before_data], np.zeros_like(data['date'][G185M][before_data]) + 58, color='black', line_width=2, line_dash='dashed')
         s1.line(data['date'][G185M][before_data], np.zeros_like(data['date'][G185M][before_data]) - 58, color='black', line_width=2, line_dash='dashed')
 
+        #-- Second
         s1.line(data['date'][G185M][after_data], np.zeros_like(data['date'][G185M][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
         s1.line(data['date'][G185M][after_data], np.zeros_like(data['date'][G185M][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
         
+        #-- Plot fit.
         s1.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
         ############################
 
@@ -443,12 +471,11 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
             fit,ydata,parameters,err = fit_data(data_acqs['date'][index],data_acqs['x_shift'][index])
             axis.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
 
+        #-- Format into single column.
         p = column(s1, s2, s3, s4, s5, s6, s7)
 
         save(p, filename=outname)
         
-        # grid = gridplot([[s1, s2], [s3, s4], [s5,s6], [s7]])
-        # save(grid, filename=outname)
 #-------------------------------------------------------------------------------
 
 def make_plots(data, data_acqs, out_dir):
@@ -464,6 +491,8 @@ def make_plots(data, data_acqs, out_dir):
         The output directory for the files.
     """
     
+    logger.info("MAKING STATIC PLOTS")
+
     mpl.rcParams['figure.subplot.hspace'] = 0.05
     
     plt.rc('font', weight='bold')
@@ -904,6 +933,6 @@ def monitor():
     #     remove_if_there(os.path.join(webpage_dir, os.path.basename(item)))
     #     shutil.copy(item, webpage_dir)
 
-    # logger.info("finish monitor")
+    logger.info("finish monitor")
 
 #----------------------------------------------------------

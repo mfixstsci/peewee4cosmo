@@ -34,6 +34,24 @@ from copy import deepcopy
 #-------------------------------------------------------------------------------
 
 def get_sun_loc(mjd, full_path):
+    """
+    Get the location of the sun from SPT files. 
+
+    Parameters
+    ----------
+    mjd : float
+        The MJD for an exposure
+    full_path : str
+        String of path and filename
+
+    Yields
+    ------
+    long_sun : float
+        Longitude of the sun
+    lat_sun : float
+        Latitude of the sun
+    """
+    
     rootname = fits.getval(full_path, 'ROOTNAME')
 
     path, _ = os.path.split(full_path)
@@ -49,7 +67,6 @@ def get_sun_loc(mjd, full_path):
         mjd = list(mjd)
 
     for m in mjd:
-
         (rect_hst, vel_hst) = orb.getPos(m)
         (r, ra_hst, dec_hst) = rectToSph(rect_hst)
 
@@ -119,12 +136,21 @@ def get_temp(filename):
 
 #-------------------------------------------------------------------------------
 
-def mjd_to_decyear( time_array ):
-    """ pull this out when you get it into astropy.time
+def mjd_to_decyear(time_array):
+    """ Changes the date in MJD units to decimal years.
+    
+    Parameters
+    ----------
+    time_array : array like
+        A list of times measured in MJD
 
+    Returns
+    -------
+    out_times : np.array
+        A numpy array of MJD to decimal year conversions.
     """
 
-    times = Time( time_array, scale='tt', format='mjd' )
+    times = Time(time_array, scale='tt', format='mjd')
 
     out_times = []
     for value in times:
@@ -141,7 +167,19 @@ def mjd_to_decyear( time_array ):
 #-------------------------------------------------------------------------------
 
 def pull_orbital_info(data_object, step=25):
-    """ Pull second by second orbital information from the full_path
+    """ Pull second by second orbital information.
+
+    Parameters
+    ----------
+    data_object : peewee query result
+        Contains the path and filename information needed to process data.
+    step : int
+        Time step in seconds
+
+    Yields
+    ------
+    info : dictionary
+        A dictionary of meta data that will be stored in a row of the DB table. 
 
     """
     
@@ -158,7 +196,7 @@ def pull_orbital_info(data_object, step=25):
         timeline = hdu['timeline'].data
         segment = hdu[0].header['segment']
     except KeyError:
-        logger.debug("no timeline extension found for: {}".format(full_path))
+        logger.debug("NO TIMELINE EXTENSION FOUND FOR: {}".format(full_path))
         print(info)
         yield info
         raise StopIteration
@@ -177,7 +215,7 @@ def pull_orbital_info(data_object, step=25):
         ylim = (440, 720)
         pha = (2, 23)
     else:
-        raise ValueError('What segment is this? {}'.format(segment))
+        raise ValueError('WHAT SEGMENT IS THIS?! {}'.format(segment))
 
     info['rootname'] = hdu[0].header['rootname']
     info['detector'] = segment
@@ -202,7 +240,7 @@ def pull_orbital_info(data_object, step=25):
     decyear = mjd_to_decyear(mjd)
 
     if not len(times):
-        logger.debug("time array empty for: {}".format(full_path))
+        logger.debug("TIME ARRAY EMPTY FOR: {}".format(full_path))
         blank = np.array([0])
         print(info)
         yield info
@@ -239,7 +277,7 @@ def pull_orbital_info(data_object, step=25):
         'Arrays are not equal in length {}:{}'.format(len(lat), len(counts))
 
     if not len(counts):
-        logger.debug("zero-length array found for: {}".format(full_path))
+        logger.debug("ZERO-LENGTH ARRAY FOUND FOR: {}".format(full_path))
         yield info
     else:
         for i in range(len(counts)):
@@ -295,6 +333,21 @@ def pha_hist(filename):
 #-------------------------------------------------------------------------------
 
 def make_plots(detector, base_dir, TA=False):
+    """ Create static monitoring plots for FUV/NUV dark rates.
+
+    Parameters
+    ----------
+    detector : str
+        The COS mode trends you are interested in plotting.
+    base_dir : str
+        Directory you are interested in writing to.
+    TA : bool
+        Flag to monitor target acq dark rate.
+
+    Returns
+    -------
+    None
+    """
     if detector == 'FUV':
         search_strings = ['_corrtag_a.fits', '_corrtag_b.fits']
         segments = ['FUVA', 'FUVB']
@@ -309,7 +362,7 @@ def make_plots(detector, base_dir, TA=False):
         solar_date = np.array( mjd_to_decyear([line[0] for line in solar_data]) )
         solar_flux = np.array([line[1] for line in solar_data])
     except TypeError:
-        logger.warning("Couldn't read solar data.  Putting in all zeros.")
+        logger.warning("COULDN'T READ SOLAR DATA. PUTTING IN ZEROS.")
         solar_date = np.ones(1000)
         solar_flux = np.ones(1000)
 
@@ -323,7 +376,7 @@ def make_plots(detector, base_dir, TA=False):
 
     for key, segment in zip(search_strings, segments):
         
-        logger.debug('creating time plot for {}:{}'.format(segment, key))
+        logger.debug('CREATING TIME PLOT FOR {}:{}'.format(segment, key))
         
         #-- Query for data here!
         data = Darks.select().where(Darks.detector == segment)
@@ -357,7 +410,7 @@ def make_plots(detector, base_dir, TA=False):
         dark = dark[index_keep]
         temp = temp[index_keep]
         
-        logger.debug('creating interactive plot for {}:{}'.format(segment, key))
+        logger.debug('CREATING INTERACTIVE PLOT FOR {}:{}'.format(segment, key))
         #-- Interactive plots
         outname = os.path.join(settings['interactive_dir'], '{}_vs_time_{}.html'.format(dark_key, segment))
         interactive_plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
@@ -368,7 +421,7 @@ def make_plots(detector, base_dir, TA=False):
         plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
 
         #-- Plot vs orbit
-        logger.debug('creating orbit plot for {}:{}'.format(segment, key))
+        logger.debug('CREATING ORBIT PLOT FOR {}:{}'.format(segment, key))
         
         data = Darks.select().where(Darks.detector==segment)
     
@@ -397,7 +450,7 @@ def make_plots(detector, base_dir, TA=False):
         plot_orbital_rate(longitude, latitude, dark, sun_lon, sun_lat, outname)
 
         #-- Plot histogram of darkrates
-        logger.debug('creating histogram plot for {}:{}'.format(segment, key))
+        logger.debug('CREATING HISTOGRAM PLOT FOR {}:{}'.format(segment, key))
         
         data = Darks.select().where(Darks.detector==segment) 
         
@@ -434,7 +487,18 @@ def make_plots(detector, base_dir, TA=False):
 #-------------------------------------------------------------------------------
 
 def move_products(base_dir, web_dir):
-    '''Move created pdf files to webpage directory
+    '''Move monitoring figures to webpage directory. 
+    
+    Parameters
+    ----------
+    base_dir : str
+        Directory where figures are located
+    web_dir : 
+        COS monitoring webpage directory.
+
+    Returns
+    -------
+    None
     '''
     for detector in ['FUV', 'NUV']:
 
@@ -455,11 +519,11 @@ def move_products(base_dir, web_dir):
             try:
                 #-- Don't want any python scripts moving.
                 if item.endswith('.py~'):
-                    logger.debug("removing {}".format(item))
+                    logger.debug("REMOVING {}".format(item))
                     move_list.remove(item)
                     continue
                 else:
-                    logger.debug("moving {}".format(item))
+                    logger.debug("MOVING {}".format(item))
                 
                 #-- Split the file and paths.
                 path, file_to_move = os.path.split(item)
@@ -474,7 +538,7 @@ def move_products(base_dir, web_dir):
                 shutil.copy(item, write_dir + file_to_move)
 
             except OSError:
-                logger.warning("Hit an os error for {}, leaving it there".format(item))
+                logger.warning("HIT AN OS ERROR FOR {}, LEAVING IT THERE".format(item))
                 move_list.remove(item)
         
         #-- Change all of the file permissions.
@@ -482,28 +546,38 @@ def move_products(base_dir, web_dir):
 #-------------------------------------------------------------------------------
 
 def monitor():
-    """Main monitoring pipeline"""
+    """Main monitoring pipeline
+    
+    Parameters
+    ----------
+    None
 
-    logger.info("Starting Monitor")
+    Returns
+    -------
+    None
+    
+    """
+
+    logger.info("STARTING MONITORS")
 
     settings = get_settings()
     out_dir = os.path.join(settings['monitor_location'], 'Darks')
     web_dir = settings['webpage_location']
 
     if not os.path.exists(out_dir):
-        logger.warning("Creating output directory: {}".format(out_dir))
+        logger.warning("CREATING OUTPUT DIRECTORY: {}".format(out_dir))
         os.makedirs(out_dir)
 
     get_solar_data(out_dir)
 
     for detector in ['FUV', 'NUV']:
-        logger.info("Making plots for {}".format(detector))
+        logger.info("MAKING PLOTS FOR {}".format(detector))
         make_plots(detector, out_dir)
 
         if detector == 'FUV':
             make_plots(detector, out_dir, TA=True)
 
-    logger.info("moving products to web directory")
+    logger.info("MOVING PRODUCTS TO WEB DIRECTORY")
     move_products(out_dir, web_dir)
 
 #-------------------------------------------------------------------------------

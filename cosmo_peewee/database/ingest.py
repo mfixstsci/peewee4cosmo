@@ -624,8 +624,9 @@ def run_monitors():
     None
     
     """
+    setup_logging()
     
     osm_monitor()
-    #dark_monitor()
+    dark_monitor()
 
 #-------------------------------------------------------------------------------
