@@ -12,14 +12,14 @@ from scipy.ndimage.filters import convolve
 import numpy as np
 import math
 import os
-from time import gmtime, strftime
+from time import gmtime, strftime, localtime
 
-#from ..utils import remove_if_there
+from ..utils import remove_if_there
 
 #-------------------------------------------------------------------------------
 
 def plot_time(detector, dark, date, temp, solar, solar_date, outname):
-    print(len(dark), len(date), len(temp), len(solar), len(solar_date))
+
     """Plot the dar-rate vs time
     Parameters
     ----------
@@ -40,7 +40,7 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
     """
 
     #-- Check and then remove if file exists.
-    #remove_if_there(outname)
+    remove_if_there(outname)
 
     #-- Begin Python
     sorted_index = np.argsort(solar_date)
@@ -71,7 +71,7 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
     
     TOOLS ='box_zoom,box_select,crosshair,pan,reset,hover'
     
-    s1 = figure(width=plt_wth, height=plt_hgt, x_range=(2009, max(date) + 0.5), title='{} Global Dark Rate as of {}'.format(detector, strftime("%m-%d-%Y %H:%M:%S", gmtime())), tools=TOOLS)
+    s1 = figure(width=plt_wth, height=plt_hgt, x_range=(2009, max(date) + 0.5), title='{} Global Dark Rate as of {} EST'.format(detector, strftime("%m-%d-%Y %H:%M:%S", localtime())), tools=TOOLS)
     s1.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Dark Rate":"$y"}
     s1.title.text_font_size = '15pt'
     s1.circle(date, dark, legend='Dark Count Rate',size=4, color="black", alpha=0.5)

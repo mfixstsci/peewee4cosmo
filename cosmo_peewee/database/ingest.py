@@ -21,7 +21,7 @@ import multiprocessing as mp
 import numpy as np
 from .models import get_database, get_settings
 from .models import Files, NUV_raw_headers, NUV_corr_headers, FUV_primary_headers, FUVA_raw_headers, FUVB_raw_headers
-from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations
+from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations, Fuv_Temp
 
 from .database_keys import nuv_raw_keys, nuv_corr_keys, fuv_primary_keys, fuva_raw_keys, fuvb_raw_keys
 from .database_keys import fuva_corr_keys, fuvb_corr_keys, obs_keys, file_keys
@@ -33,6 +33,9 @@ from ..osm.monitor import monitor as osm_monitor
 
 from ..dark.monitor import monitor as dark_monitor
 from ..dark.monitor import pull_orbital_info
+
+#from ..fuv_temp.monitor import monitor as fuv_temp_monitor
+from ..fuv_temp.monitor import pull_temp
 
 #-------------------------------------------------------------------------------
 
@@ -228,9 +231,15 @@ def populate_files(settings):
     data_to_insert = pool.map(partial, files_to_add)    
         
     if len(data_to_insert):
+        #-- Little if else logic to avoid Integrity Errors not allowing good files to be ingested
+        if len(files_to_add) < 3000:
+            step = 1
+        else:
+            step = 100
+
         #-- Pass to bulk insert.
-        for idx in range(0, len(list(data_to_insert)), 100):    
-            bulk_insert(Files, itertools.chain(*data_to_insert[idx:idx+100]))
+        for idx in range(0, len(list(data_to_insert)), step):    
+            bulk_insert(Files, itertools.chain(*data_to_insert[idx:idx+step]))
 
 #-------------------------------------------------------------------------------
 
@@ -261,7 +270,6 @@ def populate_observations(num_cpu=2):
         database = get_database()
         database.connect()
 
-        logger.info('POPULATING {} INTO OBSERVATIONS'.format(search_str))
         files_to_add = (Files.select()
                             .where(
                                 Files.filename.contains(search_str) & 
@@ -332,7 +340,7 @@ def populate_tables(table, table_keys, search_str, num_cpu=2):
                          .where(
                              Observations.filename.contains(search_str) & 
                              Observations.rootname.not_in(table.select(table.rootname)) &
-                             (FUV_raw_headers.detector == 'FUV')
+                             (FUV_primary_headers.detector == 'FUV')
                          ))
 
     #-- NUV x1d's... Maybe try to combine with the FUV by using a dictionary.
@@ -524,6 +532,46 @@ def populate_stims(num_cpu=2):
 
 #-------------------------------------------------------------------------------
 
+def populate_fuv_temp(num_cpu=2):
+    
+    """ Populate the fuv_temperture table
+    
+    Parameters
+    ----------
+    num_cpu: int
+        number of worker processes.
+
+    Returns
+    -------
+    None
+
+    """
+    
+    database = get_database()
+    database.connect()
+
+    files_to_add = (Observations.select(Observations.path, FUV_primary_headers.rootname)
+                         .join(FUV_primary_headers)
+                         .where(
+                             Observations.filename.contains('%rawtag_%') & 
+                             Observations.rootname.not_in(Fuv_Temp.select(Fuv_Temp.rootname))
+                         ))
+    
+    database.close()
+
+    partial = functools.partial(pull_data,
+                                function=pull_temp)
+    
+    #-- pool up the partials and pass it the iterable (files)
+    pool = mp.Pool(processes=num_cpu)
+    data_to_insert = pool.map(partial, files_to_add)
+    
+    # if len(data_to_insert):
+    #     #-- Pass to bulk insert.
+    #     bulk_insert(Rawacqs, itertools.chain(*data_to_insert))
+
+#-------------------------------------------------------------------------------
+
 def ingest_all():
    
     """Create tables and run all ingestion scripts
@@ -559,7 +607,8 @@ def ingest_all():
               FUVB_corr_headers,
               Lampflash,
               Rawacqs,
-              Darks]
+              Darks,
+              Fuv_Temp]
         
     #-- Safe checks existance of tables first to make sure they dont get clobbered.
     database.create_tables(tables, safe=True)
@@ -568,48 +617,51 @@ def ingest_all():
     database.close()
     
     #-- Files
-    logger.info("Ingesting Files from {}".format(settings['data_location']))
-    #populate_files(settings)
+    logger.info("INGESTING FILES FROM: {}".format(settings['data_location']))
+    populate_files(settings)
 
     #-- Observation table    
-    logger.info("Populating observations table.")
+    logger.info("POPULATING OBSERVATION TABLE")
     populate_observations(settings['num_cpu'])
 
     #-- NUV rawtag headers    
-    logger.info("Populating NUV rawtag headers.")
+    logger.info("POPULATING NUV RAWTAGS")
     populate_tables(NUV_raw_headers, nuv_raw_keys, '%_rawtag.fits.gz%', settings['num_cpu'])
 
     #-- NUV corrtag headers    
-    logger.info("Populating NUV corrtag headers.")
+    logger.info("POPULATING NUV CORRTAGS")
     populate_tables(NUV_corr_headers, nuv_corr_keys, '%_corrtag.fits.gz%', settings['num_cpu'])
 
     #-- FUV primary headers    
-    logger.info("Populating FUV primary headers.")
+    logger.info("POPULATING FUV PRIMARY HEADERS")
     populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
     populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
     #-- FUV rawtag headers    
-    logger.info("Populating FUV rawtag headers.")
+    logger.info("POPULATING FUV RAWTAG HEADERS")
     populate_tables(FUVA_raw_headers, fuva_raw_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
     populate_tables(FUVB_raw_headers, fuvb_raw_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
     #-- FUV corrtag headers    
-    logger.info("Populating FUV corrtag headers.")
+    logger.info("POPULATING FUV CORRTAGS")
     populate_tables(FUVA_corr_headers, fuva_corr_keys, '%corrtag_a.fits.gz%', settings['num_cpu'])
     populate_tables(FUVB_corr_headers, fuvb_corr_keys, '%corrtag_b.fits.gz%', settings['num_cpu'])
 
     #-- Populate rawacq monitor meta
-    logger.info("Populating Rawacqs Table")
+    logger.info("POPULATING RAW ACQS TABLE")
     populate_acqs(settings['num_cpu'])
 
     #-- Populate OSM monitor metadata
-    logger.info("Populating OSM Shift Table")
+    logger.info("POPULATING OSM DRIFT TABLE")
     populate_osm(settings['num_cpu'])
 
     #-- Populate Darks monitor meta
-    logger.info("Populating Darks Table")
+    logger.info("POPULATING DARKS TABLE")
     populate_darks(settings['num_cpu'])
     
+    #-- Populate FUV tempertures
+    # logger.info("POPULATING FUV TEMPERTURE TABLE")
+    # populate_fuv_temp(settings['num_cpu'])
 #-------------------------------------------------------------------------------
 
 def run_monitors():

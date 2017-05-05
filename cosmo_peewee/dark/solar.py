@@ -112,7 +112,7 @@ def get_solar_data(file_dir):
 
     """
 
-    logger.info('Gettting Solar flux data')
+    logger.info('GETTING SOLAR FLUX DATA')
     for txtfile in glob.glob(os.path.join(file_dir, '*_D?D.txt')):
         logger.debug("Removing old file: {}".format(txtfile))
         os.remove(txtfile)

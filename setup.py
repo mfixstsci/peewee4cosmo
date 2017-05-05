@@ -28,7 +28,6 @@ setup(
                         'pymysql',
                         'matplotlib',
                         'scipy',
-                        'fitsio',
                         'psutil'
                         ]
     )

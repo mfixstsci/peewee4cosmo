@@ -27,8 +27,6 @@ from ..utils import corrtag_image
 from ..database.models import get_settings, get_database
 from ..database.models import Darks
 
-from sqlalchemy.sql.functions import concat
-
 from copy import deepcopy
 
 #-------------------------------------------------------------------------------
@@ -51,7 +49,7 @@ def get_sun_loc(mjd, full_path):
     lat_sun : float
         Latitude of the sun
     """
-    
+
     rootname = fits.getval(full_path, 'ROOTNAME')
 
     path, _ = os.path.split(full_path)
@@ -73,6 +71,7 @@ def get_sun_loc(mjd, full_path):
         #-- Assume that we want geocentric latitude.  The difference from
         #-- astronomical latitude can be up to about 8.6 arcmin.
         lat_hst = dec_hst
+        
         #-- Subtract the sidereal time at Greenwich to convert to longitude.
         long_hst = ra_hst - 2. * math.pi * gmst(m)
         if long_hst < 0.:
@@ -80,6 +79,7 @@ def get_sun_loc(mjd, full_path):
 
         long_col = long_hst / DEGtoRAD
         lat_col = lat_hst / DEGtoRAD
+        
         #-- equatorial coords of the Sun
         rect_sun = eqSun(m)
 
@@ -122,7 +122,7 @@ def get_temp(filename):
     elif detector == 'NUV':
         temp_keyword = 'LMMCETMP'
     else:
-        raise ValueError('What??? {} {}'.format(detector, segment))
+        raise ValueError('WHAT DETECTOR AND SEGMENTS ARE THESE?! {} {}'.format(detector, segment))
 
     path, name = os.path.split(filename)
     spt_file = os.path.join(path, rootname + '_spt.fits')
@@ -295,6 +295,9 @@ def pull_orbital_info(data_object, step=25):
 #-------------------------------------------------------------------------------
 
 def compile_phd():
+
+    #-- THIS STILL USES SQLALCHEMY FROM cos_monitoring.
+    #-- MAY DELETE IN THE FUTURE.
     raise NotImplementedError("Nope, seriously can't do any of this.")
 
     #-- populate PHD table
@@ -412,7 +415,7 @@ def make_plots(detector, base_dir, TA=False):
         
         logger.debug('CREATING INTERACTIVE PLOT FOR {}:{}'.format(segment, key))
         #-- Interactive plots
-        outname = os.path.join(settings['interactive_dir'], '{}_vs_time_{}.html'.format(dark_key, segment))
+        outname = os.path.join(base_dir, detector, '{}_vs_time_{}.html'.format(dark_key, segment))
         interactive_plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
 
         outname = os.path.join(base_dir, detector, '{}_vs_time_{}.png'.format(dark_key, segment))
@@ -558,7 +561,7 @@ def monitor():
     
     """
 
-    logger.info("STARTING MONITORS")
+    logger.info("STARTING MONITOR")
 
     settings = get_settings()
     out_dir = os.path.join(settings['monitor_location'], 'Darks')

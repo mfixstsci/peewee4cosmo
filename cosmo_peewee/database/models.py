@@ -421,3 +421,18 @@ class Stims(BaseModel):
         db_table = 'stims'
     
 #-------------------------------------------------------------------------------
+
+class Fuv_Temp(BaseModel):
+    """Record location of all the FUV temperture measurements"""
+
+    rootname = CharField()
+    filename = ForeignKeyField(Observations,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+
+    class Meta:
+        db_table = 'fuv_temperture'
+
+#-------------------------------------------------------------------------------

@@ -23,7 +23,8 @@ from datetime import datetime
 
 from astropy.io import fits
 from astropy.table import Table
-from time import gmtime, strftime
+from astropy import table
+from time import gmtime, strftime, localtime
 
 from ..database.models import get_database, get_settings
 from ..database.models import Lampflash, Rawacqs, Files
@@ -32,10 +33,12 @@ from ..utils import remove_if_there
 
 from copy import deepcopy
 
+import pandas as pd
+
 from bokeh.io import output_file, show, save
-from bokeh.layouts import column, gridplot
-from bokeh.plotting import figure, ColumnDataSource
-from bokeh.models import Range1d, HoverTool, BoxSelectTool
+from bokeh.plotting import figure
+from bokeh.models import Range1d, HoverTool, BoxSelectTool, ColumnDataSource, OpenURL, TapTool, Div, Button, CustomJS
+from bokeh.layouts import column, row
 #-------------------------------------------------------------------------------
 
 def fppos_shift(lamptab_name, segment, opt_elem, cenwave, fpoffset):
@@ -222,9 +225,94 @@ def make_shift_table(db_table):
     database.close()
 
     data = Table(rows=data, names=keys)
+
     return data
 
 #-------------------------------------------------------------------------------
+
+def make_panel(data, grating, height, width, detector, plt_color, top=False, x_range=False, acqs=False):
+    """Make a bokeh panel for figure.
+
+    Parameters
+    ----------
+    data: Astropy.Table
+        Astropy table of all metadata.
+    grating: np.array
+        Data associated with a COS grating from table.
+    height: int
+        Height of panel.
+    width: int
+        Width of panel.
+    detector: str
+        FUV or NUV.
+    plt_color: str
+        color of scatter points.
+    top: Bool
+        Is it the top panel of the figure, True or False.
+    x_range: 
+    """
+
+    #-- Define tools that each panel will possess.
+    TOOLS ='box_zoom,box_select,pan,reset,tap'
+    
+    #-- Build ColumnDataSource object
+    source = ColumnDataSource(data=dict(
+                    date=data['date'][grating],
+                    shift=data['x_shift'][grating],
+                    proposid=data['proposid'][grating],
+                    rootname=data['rootname'][grating],
+                    ))
+
+    hover = HoverTool(
+                tooltips=[
+                        ("Time", "@date"),
+                        ("Shift", "@shift"),
+                        ("Proposid", "@proposid"),
+                        ("Rootname", "@rootname"),
+                        
+                        ]
+                    )
+
+    #-- Parse detector for labeling
+    if detector == 'FUV':
+        #-- If top panel, add a title
+        if top:
+            panel = figure(width=width, height=height, x_range=(min(data['date']) - 10, max(data['date']) + 10), title='FUV SHIFT1[A/B] as of {} EST'.format(strftime("%m-%d-%Y %H:%M:%S", localtime())), tools=[TOOLS,hover])
+            panel.title.text_font_size = '15pt'
+        else:
+            panel = figure(width=width, height=height, x_range=x_range, title=None, tools=[TOOLS, hover])
+       
+        #-- Label y and also draw max bounds from reference file. 
+        panel.line(data['date'], np.zeros_like(data['date']) + 300, color='black', line_width=2, line_dash='dashed')
+        panel.line(data['date'], np.zeros_like(data['date']) - 300, color='black', line_width=2, line_dash='dashed')
+        panel.yaxis.axis_label = "Shift1[A/B] (Pixels)"
+    
+    elif detector == 'NUV':
+        #-- If top panel, add a title
+        if top:
+            panel = figure(width=width, height=height, x_range=(min(data['date']) - 10, max(data['date']) + 10), title='NUV SHIFT1[A/B/C] as of {} EST'.format(strftime("%m-%d-%Y %H:%M:%S", localtime())), tools=[TOOLS, hover])
+            panel.title.text_font_size = '15pt'            
+        else:
+            panel = figure(width=width, height=height, x_range=x_range, title=None, tools=[TOOLS, hover])
+        panel.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
+
+    
+
+    #-- Make scatter plot of data
+    panel.circle('date', 'shift', legend=data['opt_elem'][grating][0], size=4, source=source, color=plt_color, alpha=0.5)
+
+    #-- Provide URL and taptool and callback info.
+    url = "http://archive.stsci.edu/proposal_search.php?id=@proposid&mission=hst"
+    taptool = panel.select(type=TapTool)
+    taptool.callback = OpenURL(url=url)
+    
+    if not acqs:
+        #-- Draw a line @ 0.
+        panel.line(data['date'][grating], np.zeros_like(data['date'][grating]), color='red', line_width=2)
+    
+    return panel
+#-------------------------------------------------------------------------------
+
 def make_interactive_plots(data, data_acqs, out_dir, detector):
     """Make interactive plots for OSM shifts  
     
@@ -249,16 +337,24 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
     data = data[sorted_index]
 
     if detector == 'FUV':
+        
         #-- Sort all data by opt_elem
         G140L = np.where((data['opt_elem'] == 'G140L'))[0]
         G130M = np.where((data['opt_elem'] == 'G130M'))[0]
         G160M = np.where((data['opt_elem'] == 'G160M'))[0]
-        
+
+        #-- Find Unique Entries
+        unique_data = table.unique(data, ['date','x_shift','rootname','proposid'])
+        unique_G140L = np.where((unique_data['opt_elem'] == 'G140L'))[0]
+        unique_G130M = np.where((unique_data['opt_elem'] == 'G130M'))[0]
+        unique_G160M = np.where((unique_data['opt_elem'] == 'G160M'))[0]
+
         #-- Begin Bokeh   
-        TOOLS ='box_zoom,box_select,crosshair,pan,reset,hover'
+        TOOLS ='box_zoom,box_select,crosshair,pan,reset,tap'
         
         #-- Plot FUV Shifts
         outname = os.path.join(out_dir, 'FUV_shift_vs_time.html')
+        remove_if_there(outname)
         output_file(outname)
         
         #-- Set panel size
@@ -266,44 +362,28 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         plt_wth = 800
 
         #-- Create bokeh figure objects
+        
         #-- Panel 1
-        s1 = figure(width=plt_wth, height=plt_hgt, x_range=(min(data['date']) - 10, max(data['date']) + 10), title='FUV SHIFT1[A/B] as of {}'.format(strftime("%m-%d-%Y %H:%M:%S", gmtime())), tools=TOOLS)
-        s1.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
-        s1.title.text_font_size = '15pt'
-        s1.circle(data['date'][G130M], data['x_shift'][G130M], legend='G130M',size=4, color="blue", alpha=0.5)
-        s1.yaxis.axis_label = "Shift1[A/B] (Pixels)"
-        ############################
-
+        s1 = make_panel(unique_data, unique_G130M, plt_hgt, plt_wth, 'FUV', 'blue', top=True)
+        #-- Fit shift as a function of date and plot it...
+        fit,ydata,parameters,err = fit_data(data['date'][G130M],data['x_shift'][G130M])
+        s1.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+        
         #-- Panel 2
-        s2 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
-        s2.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
-        s2.circle(data['date'][G160M], data['x_shift'][G160M], legend='G160M',size=4, color="green", alpha=0.5)
-        ############################
-
+        s2 = make_panel(unique_data, unique_G160M, plt_hgt, plt_wth, 'FUV', 'green', x_range=s1.x_range)
+        #-- Fit shift as a function of date and plot it...
+        fit,ydata,parameters,err = fit_data(data['date'][G160M],data['x_shift'][G160M])
+        s2.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+        
         #-- Panel 3
-        s3 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
-        s3.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
-        s3.circle(data['date'][G140L], data['x_shift'][G140L], legend='G140L',size=4, color="yellow", alpha=0.5)
+        s3 = make_panel(unique_data, unique_G140L, plt_hgt, plt_wth, 'FUV', 'yellow', x_range=s1.x_range)
+        
+        #-- Fit shift as a function of date and plot it...
+        fit,ydata,parameters,err = fit_data(data['date'][G140L],data['x_shift'][G140L])
+        s3.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+        
         s3.xaxis.axis_label = "Time (MJD)"
-        ############################
-
-        #-- Convient way of looping to set plotting axes and fitting lines etc...
-        for axis,index in zip([s1,s2,s3],[G130M,G160M,G140L]):
-            #-- Set ylabels
-            axis.yaxis.axis_label = "Shift1[A/B] (Pixels)"
-            
-            #-- Draw a line @ 0.
-            axis.line(data['date'][index], np.zeros_like(data['date'][index]), color='red', line_width=2)
-            
-            #-- Draw search boundary regions.
-            axis.line(data['date'][index], np.zeros_like(data['date'][index]) + 285, color='black', line_width=2, line_dash='dashed')
-            axis.line(data['date'][index], np.zeros_like(data['date'][index]) - 285, color='black', line_width=2, line_dash='dashed')
-            
-            #-- Fit shift as a function of date and plot it...
-            fit,ydata,parameters,err = fit_data(data['date'][index],data['x_shift'][index])
-            axis.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
-
-        #-- Format figure into single column of panels
+        
         p = column(s1, s2, s3)
 
         save(p, filename=outname)
@@ -311,6 +391,8 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
 
     #-- NUV Plots
     if detector == 'NUV':
+        
+        #-- Sort by grating.
         G230L = np.where((data['opt_elem'] == 'G230L'))[0]
         G225M = np.where((data['opt_elem'] == 'G225M'))[0]
         G285M = np.where((data['opt_elem'] == 'G285M'))[0]
@@ -323,9 +405,27 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
                         & (data_acqs['x_shift'] > 0))[0]
         mirrorb = np.where((data_acqs['opt_elem'] == 'MIRRORB')
                         & (data_acqs['x_shift'] > 0))[0]
+
+
+        #-- Sort unique entries by grating.
+        unique_data = table.unique(data, ['date','x_shift','rootname','proposid'])
+        unique_acqs = table.unique(data_acqs, ['date','x_shift','rootname','proposid'])
+
+        unique_G230L = np.where((unique_data['opt_elem'] == 'G230L'))[0]
+        unique_G225M = np.where((unique_data['opt_elem'] == 'G225M'))[0]
+        unique_G285M = np.where((unique_data['opt_elem'] == 'G285M'))[0]
+        unique_G185M = np.where((unique_data['opt_elem'] == 'G185M'))[0]
+        unique_NUV = np.where((unique_data['opt_elem'] == 'G230L') |
+                    (unique_data['opt_elem'] == 'G185M') |
+                    (unique_data['opt_elem'] == 'G225M') |
+                    (unique_data['opt_elem'] == 'G285M'))[0]
+        unique_mirrora = np.where((unique_acqs['opt_elem'] == 'MIRRORA')
+                        & (unique_acqs['x_shift'] > 0))[0]
+        unique_mirrorb = np.where((unique_acqs['opt_elem'] == 'MIRRORB')
+                        & (unique_acqs['x_shift'] > 0))[0]
         
         #-- Bokeh
-        TOOLS ='box_zoom,pan,reset,hover'
+        TOOLS ='box_zoom,pan,reset,hover,tap'
 
         #-- Bokeh panel sizes.
         plt_hgt = 250
@@ -333,27 +433,20 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
 
         #-- Set outname and create file.
         outname = os.path.join(out_dir, 'NUV_shift_vs_time.html')
+        remove_if_there(outname)
         output_file(outname)
         
         #-- G230L search range was updated earlier than the other observing modes.
         transition_date = 56500.0
         transition_date_G230L = 55535.0        
-        
 
         #-- Because of the complexity of the different transition dates, plotting with bokeh and acq figures... I've made code blocks for each panel. 
-        
         #-- Panel 1
         #-- Create bokeh figure.
-        s1 = figure(width=plt_wth, height=plt_hgt, x_range=(min(data['date']) - 10, max(data['date']) + 10), title='NUV SHIFT1[A/B/C] as of {}'.format(strftime("%m-%d-%Y %H:%M:%S", gmtime())), tools=TOOLS)
-        s1.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
-        s1.title.text_font_size = '15pt'
-        s1.circle(data['date'][G185M], data['x_shift'][G185M], legend='G185M',size=4, color="blue", alpha=0.5)
-        
-        s1.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
-        s1.line(data['date'][G185M], np.zeros_like(data['date'][G185M]), color='red', line_width=2)
-
+        s1 = make_panel(unique_data, unique_G185M, plt_hgt, plt_wth, 'NUV', 'blue', top=True)
         #-- Fit Data
         fit,ydata,parameters,err = fit_data(data['date'][G185M],data['x_shift'][G185M])
+        s1.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
 
         #-- Find transition regions.
         before_data = np.where(data['date'][G185M] <= transition_date)
@@ -366,46 +459,29 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         #-- Second
         s1.line(data['date'][G185M][after_data], np.zeros_like(data['date'][G185M][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
         s1.line(data['date'][G185M][after_data], np.zeros_like(data['date'][G185M][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
-        
-        #-- Plot fit.
-        s1.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
         ############################
 
         #-- Panel 2
-        s2 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
-        s2.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
-        s2.circle(data['date'][G225M], data['x_shift'][G225M], legend='G225M',size=4, color="red", alpha=0.5)
-        s2.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
-        s2.line(data['date'][G225M], np.zeros_like(data['date'][G225M]), color='red', line_width=2)
-
-        s2.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
-        s2.line(data['date'][G225M], np.zeros_like(data['date'][G225M]), color='red', line_width=2)
+        s2 = make_panel(unique_data, unique_G225M, plt_hgt, plt_wth, 'NUV', 'red', x_range=s1.x_range)
 
         fit,ydata,parameters,err = fit_data(data['date'][G225M],data['x_shift'][G225M])
-
+        s2.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
         before_data = np.where(data['date'][G225M] <= transition_date)
         after_data = np.where(data['date'][G225M] >= transition_date)
+        
         s2.line(data['date'][G225M][before_data], np.zeros_like(data['date'][G225M][before_data]) + 58, color='black', line_width=2, line_dash='dashed')
         s2.line(data['date'][G225M][before_data], np.zeros_like(data['date'][G225M][before_data]) - 58, color='black', line_width=2, line_dash='dashed')
 
         s2.line(data['date'][G225M][after_data], np.zeros_like(data['date'][G225M][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
         s2.line(data['date'][G225M][after_data], np.zeros_like(data['date'][G225M][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
-        
-        s2.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
         ############################
 
         #-- Panel 3
-        s3 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
-        s3.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
-        s3.circle(data['date'][G285M], data['x_shift'][G285M], legend='G285M',size=4, color="yellow", alpha=0.5)
-        s3.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
-        s3.line(data['date'][G285M], np.zeros_like(data['date'][G285M]), color='red', line_width=2)
+        s3 = make_panel(unique_data, unique_G285M, plt_hgt, plt_wth, 'NUV', 'yellow', x_range=s1.x_range)
         
-        s3.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
-        s3.line(data['date'][G285M], np.zeros_like(data['date'][G285M]), color='red', line_width=2)
-
         fit,ydata,parameters,err = fit_data(data['date'][G285M],data['x_shift'][G285M])
-
+        s3.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+        
         before_data = np.where(data['date'][G285M] <= transition_date)
         after_data = np.where(data['date'][G285M] >= transition_date)
         s3.line(data['date'][G285M][before_data], np.zeros_like(data['date'][G285M][before_data]) + 58, color='black', line_width=2, line_dash='dashed')
@@ -413,21 +489,13 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
 
         s3.line(data['date'][G285M][after_data], np.zeros_like(data['date'][G285M][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
         s3.line(data['date'][G285M][after_data], np.zeros_like(data['date'][G285M][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
-        
-        s3.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
         ############################
         
         #-- Panel 4
-        s4 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
-        s4.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
-        s4.circle(data['date'][G230L], data['x_shift'][G230L], legend='G230L',size=4, color="green", alpha=0.5)
-        s4.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
-        s4.line(data['date'][G230L], np.zeros_like(data['date'][G230L]), color='red', line_width=2)
-
-        s4.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
-        s4.line(data['date'][G230L], np.zeros_like(data['date'][G230L]), color='red', line_width=2)
+        s4 = make_panel(unique_data, unique_G230L, plt_hgt, plt_wth, 'NUV', 'green', x_range=s1.x_range)
 
         fit,ydata,parameters,err = fit_data(data['date'][G230L],data['x_shift'][G230L])
+        s4.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
 
         before_data = np.where(data['date'][G230L] <= transition_date_G230L)
         after_data = np.where(data['date'][G230L] >= transition_date_G230L)
@@ -436,40 +504,27 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
 
         s4.line(data['date'][G230L][after_data], np.zeros_like(data['date'][G230L][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
         s4.line(data['date'][G230L][after_data], np.zeros_like(data['date'][G230L][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
-        
-        s4.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
         ############################
         
         #-- Panel 5
-        s5 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
-        s5.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
-        s5.circle(data['date'][NUV], data['x_shift'][NUV], legend='ALL NUV',size=4, color="firebrick", alpha=0.5)
-        s5.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
-        s5.line(data['date'][NUV], np.zeros_like(data['date'][NUV]), color='red', line_width=2)
-        s5.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
-        s5.line(data['date'][NUV], np.zeros_like(data['date'][NUV]), color='red', line_width=2)
-
+        s5 = make_panel(unique_data, unique_NUV, plt_hgt, plt_wth, 'NUV', 'firebrick', x_range=s1.x_range)
         fit,ydata,parameters,err = fit_data(data['date'][NUV],data['x_shift'][NUV])
-
         s5.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
         ############################
         
-        s6 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
-        s6.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
-        s6.circle(data_acqs['date'][mirrora], data_acqs['x_shift'][mirrora], legend='Mirror A',size=4, color="firebrick", alpha=0.5)
+        #-- Panel 6
+        s6 = make_panel(unique_acqs, unique_mirrora, plt_hgt, plt_wth, 'NUV', 'firebrick', x_range=s1.x_range, acqs=True)
+        fit,ydata,parameters,err = fit_data(data_acqs['date'][mirrora],data_acqs['x_shift'][mirrora])
+        s6.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+        ############################
+        
 
-        s7 = figure(width=plt_wth, height=plt_hgt, x_range=s1.x_range, title=None, tools=TOOLS)
-        s7.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Shift":"$y"}
-        s7.circle(data_acqs['date'][mirrorb], data_acqs['x_shift'][mirrorb], legend='Mirror B',size=4, color="firebrick", alpha=0.5)
+        #-- Panel 7
+        s7 = make_panel(unique_acqs, unique_mirrorb, plt_hgt, plt_wth, 'NUV', 'firebrick', x_range=s1.x_range, acqs=True)
+        fit,ydata,parameters,err = fit_data(data_acqs['date'][mirrorb],data_acqs['x_shift'][mirrorb])
+        s7.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
         s7.xaxis.axis_label = "Date (MJD)"
-
-        #-- Plotting for Mirror A and B.
-        for axis,index in zip([s6, s7],[mirrora, mirrorb]):
-            #-- Set ylabels
-            axis.yaxis.axis_label = "Shift1 (Pixels)"          
-            #-- Fit shift as a function of date and plot it...
-            fit,ydata,parameters,err = fit_data(data_acqs['date'][index],data_acqs['x_shift'][index])
-            axis.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
+        ############################
 
         #-- Format into single column.
         p = column(s1, s2, s3, s4, s5, s6, s7)
@@ -905,13 +960,13 @@ def monitor():
     """Run the entire suite of monitoring
     """
 
-    logger.info("starting monitor")
+    logger.info("STARTING MONITOR")
 
     settings = get_settings()
 
     webpage_dir = os.path.join(settings['webpage_location'], 'shifts')
     monitor_dir = os.path.join(settings['monitor_location'], 'Shifts')
-    interactive_dir = settings['interactive_dir']
+
     for place in [webpage_dir, monitor_dir]:
         if not os.path.exists(place):
             logger.debug("creating monitor location: {}".format(place))
@@ -922,17 +977,17 @@ def monitor():
     
     make_plots(flash_data, rawacq_data, monitor_dir)
     
-    make_interactive_plots(flash_data, rawacq_data, interactive_dir, 'FUV')
-    make_interactive_plots(flash_data, rawacq_data, interactive_dir, 'NUV')
+    make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'FUV')
+    make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'NUV')
 
     # make_plots_2(flash_data, rawacq_data, monitor_dir)
     
     # fp_diff(flash_data)
 
-    # for item in glob.glob(os.path.join(monitor_dir, '*.p??')):
-    #     remove_if_there(os.path.join(webpage_dir, os.path.basename(item)))
-    #     shutil.copy(item, webpage_dir)
+    for item in glob.glob(os.path.join(monitor_dir, '*.p??')):
+        remove_if_there(os.path.join(webpage_dir, os.path.basename(item)))
+        shutil.copy(item, webpage_dir)
 
-    logger.info("finish monitor")
+    logger.info("FINISH MONITOR")
 
 #----------------------------------------------------------
