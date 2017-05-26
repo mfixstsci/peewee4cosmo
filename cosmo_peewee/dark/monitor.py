@@ -23,7 +23,7 @@ from .solar import get_solar_data
 from .plotting import plot_histogram, plot_time, plot_orbital_rate
 from .interactive_plots import plot_time as interactive_plot_time
 
-from ..utils import corrtag_image
+from ..utils import corrtag_image, remove_if_there
 from ..database.models import get_settings, get_database
 from ..database.models import Darks
 
@@ -369,13 +369,15 @@ def make_plots(detector, base_dir, TA=False):
         solar_date = np.ones(1000)
         solar_flux = np.ones(1000)
 
-    dark_key = 'dark'
-    if TA:
-        dark_key = 'ta_dark'
-
     #-- Open settings and get database
     settings = get_settings()
     database = get_database()
+
+
+    if TA:
+        logger.info("MAKING PLOTS FOR {} TARGACQS".format(detector))
+    else:
+        logger.info("MAKING PLOTS FOR {}".format(detector))
 
     for key, segment in zip(search_strings, segments):
         
@@ -383,93 +385,42 @@ def make_plots(detector, base_dir, TA=False):
         
         #-- Query for data here!
         data = Darks.select().where(Darks.detector == segment)
-        
-        data = [row for row in data]
-        
-        mjd = np.array([item.date for item in data])
-        
+
         #-- Parse whether you want to plot dark monitoring or targacq dark.
-        
         if TA:
             dark_key = 'ta_dark'
             dark = np.array([item.ta_dark for item in data])
         else:
+            dark_key = 'dark'
             dark = np.array([item.dark for item in data])
         
+        #-- Break query into all of it's components.
         temp = np.array([item.temp for item in data])
         latitude = np.array([item.latitude for item in data])
         longitude = np.array([item.longitude for item in data])
+        sun_lat = np.array([item.sun_lat for item in data])
+        sun_lon = np.array([item.sun_lon for item in data])
+        mjd = np.array([item.date for item in data])
 
+        #-- Sort data by date.
         index = np.argsort(mjd)
         mjd = mjd[index]
         dark = dark[index]
         temp = temp[index]
         latitude = latitude[index]
         longitude = longitude[index]
-
-
-        index_keep = np.where((longitude < 250) | (latitude > 10))[0]
-        mjd = mjd[index_keep]
-        dark = dark[index_keep]
-        temp = temp[index_keep]
-        
-        logger.debug('CREATING INTERACTIVE PLOT FOR {}:{}'.format(segment, key))
-        #-- Interactive plots
-        outname = os.path.join(base_dir, detector, '{}_vs_time_{}.html'.format(dark_key, segment))
-        interactive_plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
-
-        outname = os.path.join(base_dir, detector, '{}_vs_time_{}.png'.format(dark_key, segment))
-        if not os.path.exists(os.path.split(outname)[0]):
-            os.makedirs(os.path.split(outname)[0])
-        plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
+        sun_lat = sun_lat[index]
+        sun_lon = sun_lon[index]
+        date = np.array([item.date for item in data])
 
         #-- Plot vs orbit
         logger.debug('CREATING ORBIT PLOT FOR {}:{}'.format(segment, key))
         
-        data = Darks.select().where(Darks.detector==segment)
-    
-        data = [row for row in data]
-
-        if TA:
-            dark_key = 'ta_dark'
-            dark = np.array([item.ta_dark for item in data])
-        else:
-            dark = np.array([item.dark for item in data])
-
-        latitude = np.array([item.latitude for item in data])
-        longitude = np.array([item.longitude for item in data])
-        sun_lat = np.array([item.sun_lat for item in data])
-        sun_lon = np.array([item.sun_lon for item in data])
-        date = np.array([item.date for item in data])
-
-        index = np.argsort(date)
-        dark = dark[index]
-        latitude = latitude[index]
-        longitude = longitude[index]
-        sun_lat = sun_lat[index]
-        sun_lon = sun_lon[index]
-
         outname = os.path.join(base_dir, detector, '{}_vs_orbit_{}.png'.format(dark_key, segment))
         plot_orbital_rate(longitude, latitude, dark, sun_lon, sun_lat, outname)
 
         #-- Plot histogram of darkrates
         logger.debug('CREATING HISTOGRAM PLOT FOR {}:{}'.format(segment, key))
-        
-        data = Darks.select().where(Darks.detector==segment) 
-        
-        data = [item for item in data]
-
-        if TA:
-            dark_key = 'ta_dark'
-            dark = np.array([item.ta_dark for item in data])
-        else:
-            dark = np.array([item.dark for item in data])
-
-        date = np.array([item.date for item in data])
-
-        index = np.argsort(date)
-        date = date[index]
-        dark = dark[index]
 
         for year in set(map(int, date)):
             if year == 0:
@@ -487,6 +438,22 @@ def make_plots(detector, base_dir, TA=False):
         outname = os.path.join(base_dir, detector, '{}_hist_{}.png'.format(dark_key, segment))
         plot_histogram(dark, outname)
 
+        #-- Dark vs Time Plots.
+        #-- Restrict to avoid SAA (?)
+        index_keep = np.where((longitude < 250) | (latitude > 10))[0]
+        mjd = mjd[index_keep]
+        dark = dark[index_keep]
+        temp = temp[index_keep]
+        
+        logger.debug('CREATING INTERACTIVE VS TIME PLOT FOR {}:{}'.format(segment, key))
+        
+        #-- Interactive plots
+        outname = os.path.join(base_dir, detector, '{}_vs_time_{}.html'.format(dark_key, segment))
+        interactive_plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
+
+        #-- Static plots
+        outname = os.path.join(base_dir, detector, '{}_vs_time_{}.png'.format(dark_key, segment))
+        plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
 #-------------------------------------------------------------------------------
 
 def move_products(base_dir, web_dir):
@@ -535,7 +502,7 @@ def move_products(base_dir, web_dir):
                 os.chmod(item, 0o766)
 
                 #-- Remove the file if it exists in the webpage dir.
-                os.remove(write_dir + file_to_move)
+                remove_if_there(write_dir + file_to_move)
                 
                 #-- Copy the file over.
                 shutil.copy(item, write_dir + file_to_move)
@@ -574,7 +541,6 @@ def monitor():
     get_solar_data(out_dir)
 
     for detector in ['FUV', 'NUV']:
-        logger.info("MAKING PLOTS FOR {}".format(detector))
         make_plots(detector, out_dir)
 
         if detector == 'FUV':
