@@ -16,6 +16,7 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 from astropy.time import Time
+from astropy.io import ascii
 
 import scipy
 from scipy.stats import linregress
@@ -230,7 +231,7 @@ def make_shift_table(db_table):
 
 #-------------------------------------------------------------------------------
 
-def make_panel(data, grating, height, width, detector, plt_color, top=False, x_range=False, acqs=False):
+def make_panel(data, grating, height, width, detector, plt_color, top=False, x_range=False, acqs=False, all_nuv=False):
     """Make a bokeh panel for figure.
 
     Parameters
@@ -269,7 +270,6 @@ def make_panel(data, grating, height, width, detector, plt_color, top=False, x_r
                         ("Shift", "@shift"),
                         ("Proposid", "@proposid"),
                         ("Rootname", "@rootname"),
-                        
                         ]
                     )
 
@@ -296,10 +296,11 @@ def make_panel(data, grating, height, width, detector, plt_color, top=False, x_r
             panel = figure(width=width, height=height, x_range=x_range, title=None, tools=[TOOLS, hover])
         panel.yaxis.axis_label = "Shift1[A/B/C] (Pixels)"
 
-    
-
     #-- Make scatter plot of data
-    panel.circle('date', 'shift', legend=data['opt_elem'][grating][0], size=4, source=source, color=plt_color, alpha=0.5)
+    if all_nuv:
+        panel.circle('date', 'shift', legend='All NUV', size=4, source=source, color=plt_color, alpha=0.5)
+    else:
+        panel.circle('date', 'shift', legend=data['opt_elem'][grating][0], size=4, source=source, color=plt_color, alpha=0.5)
 
     #-- Provide URL and taptool and callback info.
     url = "http://archive.stsci.edu/proposal_search.php?id=@proposid&mission=hst"
@@ -388,7 +389,8 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
 
         save(p, filename=outname)
 
-
+        return p
+        
     #-- NUV Plots
     if detector == 'NUV':
         
@@ -507,7 +509,7 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         ############################
         
         #-- Panel 5
-        s5 = make_panel(unique_data, unique_NUV, plt_hgt, plt_wth, 'NUV', 'firebrick', x_range=s1.x_range)
+        s5 = make_panel(unique_data, unique_NUV, plt_hgt, plt_wth, 'NUV', 'firebrick', x_range=s1.x_range, all_nuv=True)
         fit,ydata,parameters,err = fit_data(data['date'][NUV],data['x_shift'][NUV])
         s5.line(ydata, fit, color='black', line_width=2, legend=str(parameters[0]))
         ############################
@@ -530,7 +532,8 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         p = column(s1, s2, s3, s4, s5, s6, s7)
 
         save(p, filename=outname)
-        
+
+        return p        
 #-------------------------------------------------------------------------------
 
 def make_plots(data, data_acqs, out_dir):
@@ -972,13 +975,15 @@ def monitor():
             logger.debug("creating monitor location: {}".format(place))
             os.makedirs(place)
 
+    #-- Create tables
     flash_data = make_shift_table(Lampflash)
     rawacq_data = make_shift_table(Rawacqs)
     
+    #-- Make static plots.
     make_plots(flash_data, rawacq_data, monitor_dir)
     
-    make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'FUV')
-    make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'NUV')
+    # make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'FUV')
+    # make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'NUV')
 
     # make_plots_2(flash_data, rawacq_data, monitor_dir)
     

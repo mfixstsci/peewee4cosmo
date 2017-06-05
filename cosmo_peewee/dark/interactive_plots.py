@@ -126,4 +126,5 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
         p = column(s1, s2)
 
     save(p, filename=outname)
+    return p
 #-------------------------------------------------------------------------------

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Monitors{% endblock %}
+
+{% block extra_head%}
+{{ js_resources|indent(4)|safe }}
+{{ css_resources|indent(4)|safe }}
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!--Breaking like this is bad, maybe fix CSS? -->
+    <!--<br><br><br>-->
+    
+    <h1>COSMO Monitoring Page</h1>
+    <p>Here you can access all of the infomation and deliverables about the monitors included in the COSMO monitoring suite.</p>
+
+    {% for script, div in plots %}    
+      {{ script|indent(4)|safe }}    
+      {{ div|indent(4)|safe }}
+    {% endfor %}
+
+</div>
+{% endblock %}
+

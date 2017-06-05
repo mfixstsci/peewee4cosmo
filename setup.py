@@ -18,8 +18,9 @@ setup(
     requires = ['numpy', 'scipy', 'astropy', 'matplotlib'],
     entry_points = {'console_scripts': ['cm_ingest=cosmo_peewee.database:ingest_all',
                                         'cm_monitors=cosmo_peewee.database:run_monitors',
-                                        'drop_tables=cosmo_peewee.database:drop_tables'
-                                        ],
+                                        'drop_tables=cosmo_peewee.database:drop_tables',
+                                        'cosmo_webapp=cosmo_peewee.webapp.main:run',
+                                        'cosmo_webapp_debug=cosmo_peewee.webapp.main:run_debug'                                        ],
     },
     install_requires = ['setuptools',
                         'numpy>=1.11.1',

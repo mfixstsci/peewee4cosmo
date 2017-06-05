@@ -32,8 +32,8 @@ from copy import deepcopy
 #-------------------------------------------------------------------------------
 
 def get_sun_loc(mjd, full_path):
-    """
-    Get the location of the sun from SPT files. 
+    
+    """ Get the location of the sun from SPT files. 
 
     Parameters
     ----------
@@ -96,6 +96,7 @@ def get_sun_loc(mjd, full_path):
 #-------------------------------------------------------------------------------
 
 def get_temp(filename):
+    
     """Get detector temperture during observation from spt filename
 
     Parameters
@@ -137,6 +138,7 @@ def get_temp(filename):
 #-------------------------------------------------------------------------------
 
 def mjd_to_decyear(time_array):
+    
     """ Changes the date in MJD units to decimal years.
     
     Parameters
@@ -167,6 +169,7 @@ def mjd_to_decyear(time_array):
 #-------------------------------------------------------------------------------
 
 def pull_orbital_info(data_object, step=25):
+    
     """ Pull second by second orbital information.
 
     Parameters
@@ -274,7 +277,7 @@ def pull_orbital_info(data_object, step=25):
         sun_lon = sun_lon[:-1]
 
     assert len(lat) == len(counts), \
-        'Arrays are not equal in length {}:{}'.format(len(lat), len(counts))
+        'ARRAYS ARE NOT EQUAL LENGTH {}:{}'.format(len(lat), len(counts))
 
     if not len(counts):
         logger.debug("ZERO-LENGTH ARRAY FOUND FOR: {}".format(full_path))
@@ -336,6 +339,7 @@ def pha_hist(filename):
 #-------------------------------------------------------------------------------
 
 def make_plots(detector, base_dir, TA=False):
+    
     """ Create static monitoring plots for FUV/NUV dark rates.
 
     Parameters
@@ -351,6 +355,7 @@ def make_plots(detector, base_dir, TA=False):
     -------
     None
     """
+
     if detector == 'FUV':
         search_strings = ['_corrtag_a.fits', '_corrtag_b.fits']
         segments = ['FUVA', 'FUVB']
@@ -457,6 +462,7 @@ def make_plots(detector, base_dir, TA=False):
 #-------------------------------------------------------------------------------
 
 def move_products(base_dir, web_dir):
+    
     '''Move monitoring figures to webpage directory. 
     
     Parameters
@@ -470,6 +476,7 @@ def move_products(base_dir, web_dir):
     -------
     None
     '''
+
     for detector in ['FUV', 'NUV']:
 
         #-- Where would you like to write the plots to?
