@@ -1,9 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Query{% endblock %}
 {% block content %}
-<h1>COSMO Querying Page</h1>
-<p>Here you can perform queries on data in the COSMO database.</p>
+
+<div class="container">
+  <h1>COSMO Query Form</h1>
+  <p>Here you can perform queries on data in the COSMO database.</p>
 
 
-
+  <form method="GET" action="/search" enctype="multipart/form-data">
+    {{ form.csrf_token }}
+    <div class="row">
+      <!--Rootname-->
+      <div class="col-md-6">
+        <b><h5>Rootname</h5></b>
+          {{ form.rootname(class="form-control",placeholder="Single rootname or comma-seperated list") }}
+      </div>
+      <!--Detector-->
+      <div class="col-md-2">
+        <b><h5>Detectors</h5></b>
+        {{ form.detectors }}
+      </div>
+      <!--Observation Type-->
+      <div class="col-md-2">
+        <b><h5>Observation Type</h5></b>
+        {{ form.obs_type}}
+      </div>
+      <div class="col-md-2">
+        <b><h5>Image Type</h5></b>
+        {{ form.img_type }}
+      </div>
+    </div>
+    <input type="submit" name="submit" value="Go!" id="submit">
+  </form>
+</div>
 {% endblock %}
