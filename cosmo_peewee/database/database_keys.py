@@ -2,59 +2,6 @@ import os
 from astropy.io import fits
 
 #-------------------------------------------------------------------------------
-
-def nuv_raw_keys(file_result):
-    """Keys for COS NUV rawtags
-    
-    Parameters
-    ----------
-    file_result: tuple
-        A tuple with a path and filename
-    
-    """
-
-    file_path = os.path.join(file_result.path, file_result.filename)
-    with fits.open(file_path) as hdu:
-            keywords = {'filename': file_result.filename,
-                        'rootname': hdu[0].header['rootname'],
-                        'date_obs': hdu[1].header['date-obs'],
-                        'detector': hdu[0].header['detector'],
-                        'imagetyp': hdu[0].header['imagetyp'],
-                        'targname': hdu[0].header['targname'],
-                        'proposid': hdu[0].header['proposid'],
-                        'ra_targ': hdu[0].header['ra_targ'],
-                        'dec_targ': hdu[0].header['dec_targ'],
-                        'pr_inv_l': hdu[0].header['pr_inv_l'],
-                        'pr_inv_f': hdu[0].header['pr_inv_f'],
-                        'opus_ver': hdu[0].header['opus_ver'],
-                        'obstype': hdu[0].header['obstype'],
-                        'obsmode': hdu[0].header['obsmode'],
-                        'exptype': hdu[0].header['exptype'],
-                        'postarg1': hdu[0].header['postarg1'],
-                        'postarg2': hdu[0].header['postarg2'],
-                        'life_adj': hdu[0].header['life_adj'],
-                        'fppos': hdu[0].header['fppos'],
-                        'exp_num': hdu[0].header['exp_num'],
-                        'cenwave': hdu[0].header['cenwave'],
-                        'propaper': hdu[0].header['propaper'],
-                        'apmpos': hdu[0].header.get('apmpos', 'N/A'),
-                        'aperxpos': hdu[0].header.get('aperxpos', -999.9),
-                        'aperypos': hdu[0].header.get('aperypos', -999.9),
-                        'aperture': hdu[0].header['aperture'],
-                        'opt_elem': hdu[0].header['opt_elem'],
-                        'extended': hdu[0].header['extended'],
-                        'obset_id': hdu[0].header['obset_id'],
-                        'asn_id': hdu[0].header['asn_id'],
-                        'asn_mtyp': hdu[1].header['asn_mtyp'],
-                        'expstart': hdu[1].header['expstart'],
-                        'expend': hdu[1].header['expend'],
-                        'exptime': hdu[1].header['exptime'],
-                        'nevents': hdu[1].header['nevents']
-                        }
-    return keywords
-
-#-------------------------------------------------------------------------------
-
 def nuv_corr_keys(file_result):
     """Keys for COS NUV corrtags
     
@@ -88,54 +35,6 @@ def nuv_corr_keys(file_result):
                         'sp_hgt_b': hdu[1].header['sp_hgt_b'],
                         'sp_hgt_c': hdu[1].header['sp_hgt_c'],
                         'exptime': hdu[1].header['exptime']
-                        }
-    return keywords
-
-#-------------------------------------------------------------------------------
-
-def fuv_primary_keys(file_result):
-    """COS FUV keywords that are shared between all data products.
-    
-    Parameters
-    ----------
-    file_result: tuple
-        A tuple with a path and filename
-    
-    """
-
-    file_path = os.path.join(file_result.path, file_result.filename)
-    with fits.open(file_path) as hdu:
-            keywords = {'filename': file_result.filename,
-                        'rootname': hdu[0].header['rootname'],
-                        'date_obs': hdu[1].header['date-obs'],
-                        'detector': hdu[0].header['detector'],
-                        'imagetyp': hdu[0].header['imagetyp'],
-                        'targname': hdu[0].header['targname'],
-                        'proposid': hdu[0].header['proposid'],
-                        'ra_targ': hdu[0].header['ra_targ'],
-                        'dec_targ': hdu[0].header['dec_targ'],
-                        'pr_inv_l': hdu[0].header['pr_inv_l'],
-                        'pr_inv_f': hdu[0].header['pr_inv_f'],
-                        'opus_ver': hdu[0].header['opus_ver'],
-                        'obstype': hdu[0].header['obstype'],
-                        'obsmode': hdu[0].header['obsmode'],
-                        'exptype': hdu[0].header['exptype'],
-                        'postarg1': hdu[0].header['postarg1'],
-                        'postarg2': hdu[0].header['postarg2'],
-                        'life_adj': hdu[0].header['life_adj'],
-                        'fppos': hdu[0].header['fppos'],
-                        'exp_num': hdu[0].header['exp_num'],
-                        'cenwave': hdu[0].header['cenwave'],
-                        'propaper': hdu[0].header['propaper'],
-                        'apmpos': hdu[0].header.get('apmpos', 'N/A'),
-                        'aperxpos': hdu[0].header.get('aperxpos', -999.9),
-                        'aperypos': hdu[0].header.get('aperypos', -999.9),
-                        'aperture': hdu[0].header['aperture'],
-                        'opt_elem': hdu[0].header['opt_elem'],
-                        'extended': hdu[0].header['extended'],
-                        'obset_id': hdu[0].header['obset_id'],
-                        'asn_id': hdu[0].header['asn_id'],
-                        'asn_mtyp': hdu[1].header['asn_mtyp']
                         }
     return keywords
     
@@ -259,10 +158,35 @@ def obs_keys(file_result):
 
     file_path = os.path.join(file_result.path, file_result.filename)
     with fits.open(file_path) as hdu:
-            keywords = {'path': file_result.path,
-                        'rootname': hdu[0].header['rootname'],
-                        'filename': file_result.filename,
+            keywords = {'rootname': hdu[0].header['rootname'],
+                        'date_obs': hdu[1].header['date-obs'],
+                        'detector': hdu[0].header['detector'],
+                        'imagetyp': hdu[0].header['imagetyp'],
                         'targname': hdu[0].header['targname'],
+                        'proposid': hdu[0].header['proposid'],
+                        'ra_targ': hdu[0].header['ra_targ'],
+                        'dec_targ': hdu[0].header['dec_targ'],
+                        'pr_inv_l': hdu[0].header['pr_inv_l'],
+                        'pr_inv_f': hdu[0].header['pr_inv_f'],
+                        'opus_ver': hdu[0].header['opus_ver'],
+                        'obstype': hdu[0].header['obstype'],
+                        'obsmode': hdu[0].header['obsmode'],
+                        'exptype': hdu[0].header['exptype'],
+                        'postarg1': hdu[0].header['postarg1'],
+                        'postarg2': hdu[0].header['postarg2'],
+                        'life_adj': hdu[0].header['life_adj'],
+                        'fppos': hdu[0].header['fppos'],
+                        'exp_num': hdu[0].header['exp_num'],
+                        'cenwave': hdu[0].header['cenwave'],
+                        'propaper': hdu[0].header['propaper'],
+                        'apmpos': hdu[0].header.get('apmpos', 'N/A'),
+                        'aperxpos': hdu[0].header.get('aperxpos', -999.9),
+                        'aperypos': hdu[0].header.get('aperypos', -999.9),
+                        'aperture': hdu[0].header['aperture'],
+                        'opt_elem': hdu[0].header['opt_elem'],
+                        'extended': hdu[0].header['extended'],
+                        'opus_ver': hdu[0].header['opus_ver'],
+                        'life_adj': hdu[0].header['life_adj']
                         }
     return keywords
 
@@ -297,6 +221,13 @@ def file_keys(file_result):
     #-- Sorry, file won't open or doesn't have data...
     except (IOError, TypeError, ValueError) as e:
         keywords['monitor_flag'] = False
+    
+    #-- Add rootname to table
+    rootname = filename.split('_')[0]
+    if not len(rootname) == 9:
+        rootname = None
+    
+    keywords['rootname'] = rootname
 
     return keywords 
 

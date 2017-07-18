@@ -20,10 +20,10 @@ import itertools
 import multiprocessing as mp
 import numpy as np
 from .models import get_database, get_settings
-from .models import Files, NUV_raw_headers, NUV_corr_headers, FUV_primary_headers, FUVA_raw_headers, FUVB_raw_headers
-from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations, Fuv_Temp
+from .models import Files, NUV_corr_headers, FUVA_raw_headers, FUVB_raw_headers
+from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations
 
-from .database_keys import nuv_raw_keys, nuv_corr_keys, fuv_primary_keys, fuva_raw_keys, fuvb_raw_keys
+from .database_keys import nuv_corr_keys, fuva_raw_keys, fuvb_raw_keys
 from .database_keys import fuva_corr_keys, fuvb_corr_keys, obs_keys, file_keys
 
 from ..filesystem import find_all_datasets
@@ -35,11 +35,11 @@ from ..dark.monitor import monitor as dark_monitor
 from ..dark.monitor import pull_orbital_info
 
 #from ..fuv_temp.monitor import monitor as fuv_temp_monitor
-from ..fuv_temp.monitor import pull_temp
+#from ..fuv_temp.monitor import pull_temp
 
 #-------------------------------------------------------------------------------
 
-def bulk_insert(table, data_source):
+def bulk_insert(table, data_source, debug=False):
     
     """ Ingest data into database
 
@@ -60,23 +60,35 @@ def bulk_insert(table, data_source):
     database = get_database()
     database.connect()
 
-    try:
-        with database.atomic():
-            table.insert_many(data_source).execute()
+    #-- Insert all of the entries one by one for debugging purposes.
+    if debug:
+        for item in data_source:
+            try:
+                table.insert(**item).execute()
+            except IntegrityError as e:
+                print('IntegrityError:', e)
+                print(item['rootname'])
         database.close()
-    #-- Lots of multiples, hopefully will be fixed with new filesystem implimentation.   
-    except IntegrityError as e:
-        print('IntegrityError:', e)
-        database.close()
-    except IOError as e:
-        print('IOError:',  e)
-        database.close()
-    except OperationalError as e:
-        print('OperationalError', e)
-        database.close()
-    except InternalError as e:
-        print('InternalError', e)
-        database.close()
+    
+    #-- Bulk inserts.
+    else:
+        try:
+            with database.atomic():
+                table.insert_many(data_source).execute()
+            database.close()
+        #-- Lots of multiples, hopefully will be fixed with new filesystem implimentation.   
+        except IntegrityError as e:
+            print('IntegrityError:', e)
+            database.close()
+        except IOError as e:
+            print('IOError:',  e)
+            database.close()
+        except OperationalError as e:
+            print('OperationalError', e)
+            database.close()
+        except InternalError as e:
+            print('InternalError', e)
+            database.close()
 #-------------------------------------------------------------------------------
 
 def pull_data(file_result, function):
@@ -148,9 +160,9 @@ def bulk_delete(all_files):
         
         Files.get(Files.filename == f).delete_instance()
         
-        #-- Some files exist in files that need to be removed that don't exist in Observations.
+        #-- Hack to use the rootname to delete.
         try:
-            Observations.get(Observations.filename == f).delete_instance()
+            Observations.get(Observations.rootname == f[:9]).delete_instance()
         except DoesNotExist:
             continue
 
@@ -229,10 +241,12 @@ def populate_files(settings):
     #-- pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=settings['num_cpu'])
     data_to_insert = pool.map(partial, files_to_add)    
-        
+ 
+    #-- DB times out if all tables are nuked.
+    #-- Seems to be the best method but don't know how to get it to work...
     if len(data_to_insert):
         #-- Little if else logic to avoid Integrity Errors not allowing good files to be ingested
-        if len(files_to_add) < 3000:
+        if len(files_to_add) < 6000:
             step = 1
         else:
             step = 100
@@ -240,56 +254,6 @@ def populate_files(settings):
         #-- Pass to bulk insert.
         for idx in range(0, len(list(data_to_insert)), step):    
             bulk_insert(Files, itertools.chain(*data_to_insert[idx:idx+step]))
-
-#-------------------------------------------------------------------------------
-
-def populate_observations(num_cpu=2):
-    
-    """Populate table with observations. This seperates files that the 
-    monitors use from telemetry/MAST created files like .jit, .jif, cci's, etc.
-
-    Parameters
-    ----------
-    num_cpu: int
-        number of worker processes.
-
-    Returns
-    -------
-    None
-    
-    """
-
-    search_list = ['%rawtag%.gz',
-                   '%corrtag%.gz',
-                   '%_x1d.%.gz', #-- Get x1ds
-                   '%_x1ds%.gz', #-- Get x1dsums
-                   '%rawacq%.gz%',
-                   '%lampflash%.gz']
-        
-    for search_str in search_list:
-        database = get_database()
-        database.connect()
-
-        files_to_add = (Files.select()
-                            .where(
-                                Files.filename.contains(search_str) & 
-                                Files.filename.not_in(Observations.select(Observations.filename)) &
-                                (Files.monitor_flag == True)
-                            ))
-
-        database.close() 
-        
-        #-- set up partials
-        partial = functools.partial(pull_data,
-                                    function=obs_keys)
-        
-        #-- pool up the partials and pass it the iterable (files)
-        pool = mp.Pool(processes=num_cpu)
-        data_to_insert = pool.map(partial, files_to_add)
-        
-        if len(data_to_insert):
-            #-- Pass to bulk insert.
-            bulk_insert(Observations, itertools.chain(*data_to_insert))
         
 #-------------------------------------------------------------------------------
 
@@ -322,45 +286,33 @@ def populate_tables(table, table_keys, search_str, num_cpu=2):
     #-- not in the table you wish to populate and that the monitoring flag is set 
     #-- to true so we know that it isnt corrupted.
     
-    #-- Have to do some special parsing for FUV because of the degeneracy in A & B 
-    #-- data products. Dont want to include duplicates.
-    if search_str in ['%rawtag_a.fits.gz%', '%rawtag_b.fits.gz%'] and table._meta.db_table == 'fuv_primary_headers':
-        files_to_add = (Observations.select()
-                        .where(
-                            Observations.filename.contains(search_str) & 
-                            Observations.rootname.not_in(table.select(table.rootname))
-                        ))
-
     #-- Because the FUV and NUV x1d files share the same naming scheme, we need to 
     #-- perform a join on the resepective table and make sure that we are only adding
     #-- FUV or NUV exposures to their respective tables.
-    elif table._meta.db_table == 'fuv_x1d_headers':
+    if table._meta.db_table == 'fuv_x1d_headers':
         files_to_add = (Observations.select()
-                         .join(FUV_raw_headers)
                          .where(
                              Observations.filename.contains(search_str) & 
                              Observations.rootname.not_in(table.select(table.rootname)) &
-                             (FUV_primary_headers.detector == 'FUV')
+                             (Observations.detector == 'FUV')
                          ))
 
     #-- NUV x1d's... Maybe try to combine with the FUV by using a dictionary.
     elif table._meta.db_table == 'nuv_x1d_headers':
-        files_to_add = (Observations.select()
-                         .join(NUV_raw_headers)
+        files_to_add = (Files.select()
                          .where(
-                             Observations.filename.contains(search_str) & 
-                             Observations.rootname.not_in(table.select(table.rootname)) &
-                             (NUV_raw_headers.detector == 'NUV') 
+                             Files.filename.contains(search_str) & 
+                             Files.rootname.not_in(table.select(table.rootname)) &
+                             (Observations.detector == 'NUV') 
                          ))
-    
     #-- Else, the tables should look like this
     else:
-        files_to_add = (Observations.select()
+        files_to_add = (Files.select()
                             .where(
-                                Observations.filename.contains(search_str) & 
-                                Observations.filename.not_in(table.select(table.filename)) 
+                                Files.filename.contains(search_str) & 
+                                Files.rootname.not_in(table.select(table.rootname)) &
+                                (Files.monitor_flag == True)
                             ))
-    
     database.close()
     
     #-- set up partials
@@ -394,10 +346,11 @@ def populate_osm(num_cpu=2):
     database = get_database()
     database.connect()
 
-    files_to_add = (Observations.select()
+    files_to_add = (Files.select()
                             .where(
-                                Observations.filename.contains('%lampflash%.gz') & 
-                                Observations.filename.not_in(Lampflash.select(Lampflash.filename)) 
+                                Files.filename.contains('%lampflash%.gz') & 
+                                Files.filename.not_in(Lampflash.select(Lampflash.filename)) & 
+                                (Files.monitor_flag == True) 
                             ))
     database.close()
 
@@ -431,10 +384,11 @@ def populate_acqs(num_cpu=2):
     database = get_database()
     database.connect()
 
-    files_to_add = (Observations.select()
+    files_to_add = (Files.select()
                             .where(
-                                Observations.filename.contains('%rawacq%.gz') & 
-                                Observations.filename.not_in(Rawacqs.select(Rawacqs.filename))
+                                Files.filename.contains('%rawacq%.gz') & 
+                                Files.filename.not_in(Rawacqs.select(Rawacqs.filename)) &
+                                (Files.monitor_flag == True)
                             ))
     
     database.close()
@@ -470,10 +424,12 @@ def populate_darks(num_cpu=2):
     database = get_database()
     database.connect()
 
-    files_to_add = (Observations.select()
-                            .where( 
-                                Observations.filename.contains('%corrtag%.gz') & 
-                                Observations.filename.not_in(Darks.select(Darks.filename)) & 
+    files_to_add = (Files.select()
+                            .join(Observations, on=(Files.rootname == Observations.rootname))
+                            .where(
+                                (Files.filename.contains('%corrtag%.gz') &
+                                 Files.filename.not_in(Darks.select(Darks.filename)) & 
+                                 Files.monitor_flag == True) &
                                 (Observations.targname == 'DARK')
                             ))
     database.close()
@@ -598,18 +554,15 @@ def ingest_all():
     #-- Tables to create.
     tables = [Files,
               Observations,
-              NUV_raw_headers,
               NUV_corr_headers,
-              FUV_primary_headers, 
               FUVA_raw_headers, 
               FUVB_raw_headers,
               FUVA_corr_headers, 
               FUVB_corr_headers,
               Lampflash,
               Rawacqs,
-              Darks,
-              Fuv_Temp]
-        
+              Darks]
+
     #-- Safe checks existance of tables first to make sure they dont get clobbered.
     database.create_tables(tables, safe=True)
     
@@ -621,21 +574,24 @@ def ingest_all():
     populate_files(settings)
 
     #-- Observation table    
+    #-- Replacing the fuv_primary_headers and nuv_raw_headers and combining.
     logger.info("POPULATING OBSERVATION TABLE")
-    populate_observations(settings['num_cpu'])
 
-    #-- NUV rawtag headers    
-    logger.info("POPULATING NUV RAWTAGS")
-    populate_tables(NUV_raw_headers, nuv_raw_keys, '%_rawtag.fits.gz%', settings['num_cpu'])
+    #-- if raw file types don't exist, then whats the point...?
+    filetypes = ['%rawacq.fits.gz',
+                 '%lampflash.fits.gz',
+                 '%rawaccum.fits.gz',
+                 '%rawtag.fits.gz', 
+                 '%rawtag_a.fits.gz', 
+                 '%rawtag_b.fits.gz'
+                 ]
+
+    for file_type in filetypes:
+        populate_tables(Observations, obs_keys, file_type, settings['num_cpu'])
 
     #-- NUV corrtag headers    
     logger.info("POPULATING NUV CORRTAGS")
     populate_tables(NUV_corr_headers, nuv_corr_keys, '%_corrtag.fits.gz%', settings['num_cpu'])
-
-    #-- FUV primary headers    
-    logger.info("POPULATING FUV PRIMARY HEADERS")
-    populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
-    populate_tables(FUV_primary_headers, fuv_primary_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
     #-- FUV rawtag headers    
     logger.info("POPULATING FUV RAWTAG HEADERS")
@@ -659,7 +615,7 @@ def ingest_all():
     logger.info("POPULATING DARKS TABLE")
     populate_darks(settings['num_cpu'])
     
-    #-- Populate FUV tempertures
+    # #-- Populate FUV tempertures
     # logger.info("POPULATING FUV TEMPERTURE TABLE")
     # populate_fuv_temp(settings['num_cpu'])
 #-------------------------------------------------------------------------------

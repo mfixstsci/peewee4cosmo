@@ -1,5 +1,4 @@
 from peewee import *
-import os
 from ..database.models import get_settings, get_database
 from ..database.models import Files
 from ..database.models import Darks, Lampflash, Rawacqs
@@ -18,14 +17,14 @@ from bokeh.util.string import encode_utf8
 
 from astropy.io import ascii
 
+import os
+
 import numpy as np
 
 from flask import Flask, Response, redirect, json, render_template, request, session, url_for
 from wtforms import Form, BooleanField, StringField, validators
 from werkzeug.utils import secure_filename
 import wtforms
-from flask_wtf import FlaskForm
-from flask_wtf.file import FileField as FlaskFileField, FileRequired as FlaskFileRequired
 
 import datetime
 
@@ -67,7 +66,7 @@ def index():
     return render_template("home.html")
 #-------------------------------------------------------------------------------
 
-class ExampleForm(FlaskForm):
+class QueryForm(wtforms.Form):
     rootname = wtforms.StringField()
     #-- Detectors
     # fuv = wtforms.BooleanField()
@@ -77,41 +76,45 @@ class ExampleForm(FlaskForm):
     obs_type = wtforms.SelectMultipleField(choices=OBS_TYPE, widget=select_multi_checkbox)
     #-- Img Type
     img_type = wtforms.SelectMultipleField(choices=IMG_TYPE, widget=select_multi_checkbox)
-    #-- Gratings
-    g130m = wtforms.BooleanField() # FUV
-    g140l = wtforms.BooleanField()
-    g160m = wtforms.BooleanField()
-    g185m = wtforms.BooleanField() # NUV
-    g225m = wtforms.BooleanField()
-    g285m = wtforms.BooleanField()
-    g230l = wtforms.BooleanField()
-    #-- Proposal ID field.
-    proposid = wtforms.StringField()
-    apertures = wtforms.widgets.Select()
-    #-- Cenwaves FUV
-    cw_1055 = wtforms.BooleanField()# G130M
-    cw_1096 = wtforms.BooleanField()
-    cw_1222 = wtforms.BooleanField()
-    cw_1291 = wtforms.BooleanField()
-    cw_1300 = wtforms.BooleanField()
-    cw_1309 = wtforms.BooleanField()
-    cw_1318 = wtforms.BooleanField()
-    cw_1327 = wtforms.BooleanField()
-    cw_1577 = wtforms.BooleanField()# G160M
-    cw_1589 = wtforms.BooleanField()
-    cw_1600 = wtforms.BooleanField()
-    cw_1611 = wtforms.BooleanField()
-    cw_1623 = wtforms.BooleanField()
-    cw_1105 = wtforms.BooleanField()# G140L
-
+    # #-- Gratings
+    # g130m = wtforms.BooleanField() # FUV
+    # g140l = wtforms.BooleanField()
+    # g160m = wtforms.BooleanField()
+    # g185m = wtforms.BooleanField() # NUV
+    # g225m = wtforms.BooleanField()
+    # g285m = wtforms.BooleanField()
+    # g230l = wtforms.BooleanField()
+    # #-- Proposal ID field.
+    # proposid = wtforms.StringField()
+    # apertures = wtforms.widgets.Select()
+    # #-- Cenwaves FUV
+    # cw_1055 = wtforms.BooleanField()# G130M
+    # cw_1096 = wtforms.BooleanField()
+    # cw_1222 = wtforms.BooleanField()
+    # cw_1291 = wtforms.BooleanField()
+    # cw_1300 = wtforms.BooleanField()
+    # cw_1309 = wtforms.BooleanField()
+    # cw_1318 = wtforms.BooleanField()
+    # cw_1327 = wtforms.BooleanField()
+    # cw_1577 = wtforms.BooleanField()# G160M
+    # cw_1589 = wtforms.BooleanField()
+    # cw_1600 = wtforms.BooleanField()
+    # cw_1611 = wtforms.BooleanField()
+    # cw_1623 = wtforms.BooleanField()
+    # cw_1105 = wtforms.BooleanField()# G140L
 #-------------------------------------------------------------------------------
-@app.route('/search', methods=['GET', 'POST'])
+@app.route('/search')
 def search():
-    form = ExampleForm()  # FlaskForm knows how to reach into `request` for data, unlike wtforms.Form
-    if request.method == 'GET':
-        print('GET')
-        
-    return render_template("query.html",form=form)
+    form = QueryForm(request.args)
+    if request.query_string and form.validate(): # validate if any arguments were submitted
+
+        #-- Parse all fields and only select selected fields from form.
+        #-- form.data returns a dictionary
+        selected_fields = {key:form.data[key] for key in form.data.keys() if form.data[key] != '' }
+        print(selected_fields)
+
+
+    return render_template("query.html", form=form)
 #-------------------------------------------------------------------------------
 @app.route('/monitoring')
 def monitors():

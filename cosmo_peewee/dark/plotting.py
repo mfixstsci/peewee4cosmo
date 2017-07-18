@@ -225,7 +225,10 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
         sub_ax.set_ylabel('Temperature', fontsize=17, fontweight='bold')
         sub_ax.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
         sub_ax.set_xlim(2009.5, date.max() + .1)
-        #sub_ax.set_ylim(15, 27)
+
+        #-- FOR YEARLY ISR
+        # sub_ax.set_xlim(2009.5, 2016.74863388)
+
         sub_ax.grid(True)
 
         solar_smooth = scipy.convolve(solar, np.ones(81) / 81.0, mode='same')
@@ -280,6 +283,10 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
         sub_ax.set_ylabel('Radio Flux', fontsize=17, fontweight='bold')
         sub_ax.set_ylim(50, 210)
         sub_ax.set_xlim(2009.5, date.max() + .1)
+        
+        #-- FOR YEARLY ISR
+        # sub_ax.set_xlim(2009.5, 2016.74863388)
+
         sub_ax.legend(numpoints=1, shadow=True, loc='best')
         sub_ax.grid(True)
             

@@ -77,6 +77,7 @@ class Files(BaseModel):
     """Main files table"""
     path = CharField()
     filename = CharField(primary_key=True)
+    rootname = CharField(null=True)
     monitor_flag = BooleanField()
     
     class Meta:
@@ -86,19 +87,6 @@ class Files(BaseModel):
 
 class Observations(BaseModel):
     """Observations table"""
-    path = CharField()
-    filename = CharField(primary_key=True)
-    targname = CharField()
-    rootname = CharField()
-  
-    class Meta:
-        db_table = 'observations'  
-
-#-------------------------------------------------------------------------------
-
-class NUV_raw_headers(BaseModel):
-    """NUV Raw Header Table"""
-
     rootname = CharField(primary_key=True)
     date_obs = CharField()
     detector = CharField()
@@ -126,29 +114,15 @@ class NUV_raw_headers(BaseModel):
     aperture = CharField()
     opt_elem = CharField()
     extended = CharField()
-    obset_id = CharField()
-    asn_id = CharField()
-    asn_mtyp = CharField()
-    expstart = FloatField()
-    expend = FloatField()
-    exptime = FloatField()
-    nevents = IntegerField()
-
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
-                               default=None,
-                               to_field="filename",
-                               on_delete='CASCADE')
-
+  
     class Meta:
-        db_table = 'nuv_raw_headers'
- 
+        db_table = 'observations'  
 #-------------------------------------------------------------------------------
 
 class NUV_corr_headers(BaseModel):
     """NUV Corrtag Header Table"""
 
-    rootname = CharField(primary_key = True)
+    filename = CharField()
     shift1a = FloatField()
     shift1b = FloatField()
     shift1c = FloatField()
@@ -169,64 +143,22 @@ class NUV_corr_headers(BaseModel):
     sp_hgt_c = FloatField()
     exptime = FloatField()
 
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
+    rootname = ForeignKeyField(Observations,
+                               db_column='rootname',
                                default=None,
-                               to_field="filename",
-                               on_delete='CASCADE')
+                               to_field="rootname",
+                               on_delete='CASCADE',
+                               primary_key=True,)
 
     class Meta:
         db_table = 'nuv_corr_headers'
-#-------------------------------------------------------------------------------
-
-class FUV_primary_headers(BaseModel):
-    """Table of shared keywords for both segments"""
-
-    rootname = CharField(primary_key = True)
-    date_obs = CharField()
-    detector = CharField()
-    imagetyp = CharField()
-    targname = CharField()
-    proposid = FloatField()
-    ra_targ = FloatField()
-    dec_targ = FloatField()
-    pr_inv_l = CharField()
-    pr_inv_f = CharField()
-    opus_ver = CharField()
-    obstype = CharField()
-    obsmode = CharField()
-    exptype = CharField()
-    postarg1 = IntegerField()
-    postarg2 = IntegerField()
-    life_adj = IntegerField()
-    fppos = IntegerField()
-    exp_num = IntegerField()
-    cenwave = IntegerField()
-    propaper = CharField()
-    apmpos = CharField()
-    aperxpos = FloatField()
-    aperypos = FloatField()
-    aperture = CharField()
-    opt_elem = CharField()
-    extended = CharField()
-    obset_id = CharField()
-    asn_id = CharField()
-    asn_mtyp = CharField()
-
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
-                               default=None,
-                               to_field="filename",
-                               on_delete='CASCADE')
-    class Meta:
-        db_table = 'fuv_primary_headers'
 
 #-------------------------------------------------------------------------------
 
 class FUVA_raw_headers(BaseModel):
     'Table of raw fuva data'
 
-    rootname = CharField(primary_key = True)
+    filename = CharField()
     expstart = FloatField()
     expend = FloatField()
     rawtime = FloatField()
@@ -235,10 +167,11 @@ class FUVA_raw_headers(BaseModel):
     feventa = FloatField()
     hvlevela = IntegerField()
 
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
+    rootname = ForeignKeyField(Observations,
+                               primary_key=True,
+                               db_column='rootname',
                                default=None,
-                               to_field="filename",
+                               to_field="rootname",
                                on_delete='CASCADE')
     class Meta:
         db_table = 'fuva_raw_headers'
@@ -248,7 +181,7 @@ class FUVA_raw_headers(BaseModel):
 class FUVB_raw_headers(BaseModel):
     'Table of raw fuvb data'
 
-    rootname = CharField(primary_key = True)
+    filename = CharField()
     expstart = FloatField()
     expend = FloatField()
     rawtime = FloatField()
@@ -257,10 +190,11 @@ class FUVB_raw_headers(BaseModel):
     feventb = FloatField()
     hvlevelb = IntegerField()
 
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
+    rootname = ForeignKeyField(Observations,
+                               primary_key = True,
+                               db_column='rootname',
                                default=None,
-                               to_field="filename",
+                               to_field="rootname",
                                on_delete='CASCADE')
     class Meta:
         db_table = 'fuvb_raw_headers'
@@ -270,7 +204,7 @@ class FUVB_raw_headers(BaseModel):
 class FUVA_corr_headers(BaseModel):
     'Table of corr fuva data'
 
-    rootname = CharField(primary_key = True)
+    filename = CharField()
     shift1a = FloatField()
     shift2a = FloatField()
     sp_loc_a = FloatField()
@@ -280,10 +214,11 @@ class FUVA_corr_headers(BaseModel):
     sp_hgt_a = IntegerField()
     exptime = FloatField()
 
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
+    rootname = ForeignKeyField(Observations,
+                               primary_key = True,
+                               db_column='rootname',
                                default=None,
-                               to_field="filename",
+                               to_field="rootname",
                                on_delete='CASCADE')
     class Meta:
         db_table = 'fuva_corr_headers'
@@ -293,7 +228,7 @@ class FUVA_corr_headers(BaseModel):
 class FUVB_corr_headers(BaseModel):
     'Table of corr fuvb data'
 
-    rootname = CharField(primary_key = True)
+    filename = CharField()
     shift1b = FloatField()
     shift2b = FloatField()
     sp_loc_b = FloatField()
@@ -303,10 +238,11 @@ class FUVB_corr_headers(BaseModel):
     sp_hgt_b = IntegerField()
     exptime = FloatField()
 
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
+    rootname = ForeignKeyField(Observations,
+                               primary_key = True,
+                               db_column='rootname',
                                default=None,
-                               to_field="filename",
+                               to_field="rootname",
                                on_delete='CASCADE')
     class Meta:
         db_table = 'fuvb_corr_headers'
@@ -317,7 +253,7 @@ class Lampflash(BaseModel):
 
     """Preped metadata for OSM monitor."""
 
-    rootname = CharField(default='N/A')
+    filename = CharField(default='N/A')
     date = FloatField(default=-999.9)
     proposid = IntegerField(default=-999)
     detector = CharField(default='N/A')
@@ -333,10 +269,10 @@ class Lampflash(BaseModel):
     cal_date = CharField(default='N/A')
     found = BooleanField(default=False)
     
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
+    rootname = ForeignKeyField(Observations,
+                               db_column='rootname',
                                default=None,
-                               to_field="filename",
+                               to_field="rootname",
                                on_delete='CASCADE')
     
     class Meta:
@@ -348,7 +284,7 @@ class Rawacqs(BaseModel):
     """Preped metadata for OSM monitor."""
     
     #rootname = CharField(primary_key=True)
-    rootname = CharField()
+    filename = CharField()
     date = FloatField()
     proposid = IntegerField()
     detector = CharField()
@@ -362,10 +298,10 @@ class Rawacqs(BaseModel):
     cal_date = CharField()
     found = BooleanField()
     
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
+    rootname = ForeignKeyField(Observations,
+                               db_column='rootname',
                                default=None,
-                               to_field="filename",
+                               to_field="rootname",
                                on_delete='CASCADE')
     
     class Meta:
@@ -376,7 +312,7 @@ class Rawacqs(BaseModel):
 class Darks(BaseModel):
     """Record dark rate"""
     
-    rootname = CharField(default='N/A')
+    filename = CharField(default='N/A')
     detector = CharField(default='N/A')
     date = FloatField(default=0.0)
     dark = FloatField(default=0.0)
@@ -386,11 +322,12 @@ class Darks(BaseModel):
     sun_lat = FloatField(default=0.0)
     sun_lon = FloatField(default=0.0)
     temp = FloatField(default=0.0)
+    targname = CharField()
 
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
+    rootname = ForeignKeyField(Observations,
+                               db_column='rootname',
                                default=None,
-                               to_field="filename",
+                               to_field="rootname",
                                on_delete='CASCADE')
     
     class Meta:
@@ -401,7 +338,7 @@ class Darks(BaseModel):
 class Stims(BaseModel):
     """Record location of all STIM pulses"""
 
-    rootname = CharField()
+    filename = CharField()
     time = FloatField(default=0)
     abs_time = FloatField(default=0)
     stim1_x = FloatField(default=0)
@@ -411,28 +348,13 @@ class Stims(BaseModel):
     counts = FloatField(default=0)
     segment = CharField()
   
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
+    rootname = ForeignKeyField(Observations,
+                               db_column='rootname',
                                default=None,
-                               to_field="filename",
+                               to_field="rootname",
                                on_delete='CASCADE')
 
     class Meta:
         db_table = 'stims'
     
-#-------------------------------------------------------------------------------
-
-class Fuv_Temp(BaseModel):
-    """Record location of all the FUV temperture measurements"""
-
-    rootname = CharField()
-    filename = ForeignKeyField(Observations,
-                               db_column='filename',
-                               default=None,
-                               to_field="filename",
-                               on_delete='CASCADE')
-
-    class Meta:
-        db_table = 'fuv_temperture'
-
 #-------------------------------------------------------------------------------

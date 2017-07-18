@@ -221,6 +221,7 @@ def pull_orbital_info(data_object, step=25):
         raise ValueError('WHAT SEGMENT IS THIS?! {}'.format(segment))
 
     info['rootname'] = hdu[0].header['rootname']
+    info['targname'] = hdu[0].header['targname']
     info['detector'] = segment
     info['temp'] = get_temp(full_path)
 
