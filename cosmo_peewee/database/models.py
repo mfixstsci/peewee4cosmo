@@ -347,7 +347,8 @@ class Stims(BaseModel):
     stim2_y = FloatField(default=0)
     counts = FloatField(default=0)
     segment = CharField()
-  
+    proposid = IntegerField()
+
     rootname = ForeignKeyField(Observations,
                                db_column='rootname',
                                default=None,

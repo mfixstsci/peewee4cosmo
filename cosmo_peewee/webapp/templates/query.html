@@ -22,13 +22,37 @@
       <!--Observation Type-->
       <div class="col-md-2">
         <b><h5>Observation Type</h5></b>
-        {{ form.obs_type}}
+        {{ form.obstypes }}
       </div>
+      <!--Image Type-->
       <div class="col-md-2">
         <b><h5>Image Type</h5></b>
         {{ form.img_type }}
       </div>
     </div>
+
+    <div class="row">
+      <!--Cenwaves-->
+      <div class="col-md-12">
+        <b><h5>Cenwaves</h5></b>
+        {{ form.cenwaves(ul_class="checky-boiz flat-boiz") }}
+      </div>
+    </div>
+
+    <div class="row">
+      <!--Life Adjusments-->
+      <div class="col-md-3">
+        <b><h5>Lifetime Adjustments</h5></b>
+        {{ form.life_adj(ul_class="checky-boiz flat-boiz") }}
+      </div>
+
+      <!--Life Adjusments-->
+      <div class="col-md-3">
+        <b><h5>Exposure Type</h5></b>
+        {{ form.exptype(ul_class="checky-boiz flat-boiz") }}
+      </div>
+    </div>
+
     <input type="submit" name="submit" value="Go!" id="submit">
   </form>
 </div>

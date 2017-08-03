@@ -673,9 +673,9 @@ def make_plots(data, data_acqs, out_dir):
     ax.axhline(y=-58, xmin=0, xmax=transition_fraction,
                 color='k', lw=3, ls='--', zorder=1)
 
-    ax.axhline(y=58 - 20, xmin=transition_fraction, xmax=1,
+    ax.axhline(y=90, xmin=transition_fraction, xmax=1,
                 color='k', lw=3, ls='--', zorder=1)
-    ax.axhline(y=-58 - 20, xmin=transition_fraction,
+    ax.axhline(y=-90, xmin=transition_fraction,
                 xmax=1, color='k', lw=3, ls='--', zorder=1)
     #--
 
@@ -696,9 +696,9 @@ def make_plots(data, data_acqs, out_dir):
     ax2.axhline(y=58, xmin=0, xmax=transition_fraction, color='k', lw=3, ls='--', zorder=1, label='Search Range')
     ax2.axhline(y=-58, xmin=0, xmax=transition_fraction, color='k', lw=3, ls='--', zorder=1)
 
-    ax2.axhline(y=58 - 10, xmin=transition_fraction, xmax=1,
+    ax2.axhline(y=90, xmin=transition_fraction, xmax=1,
                 color='k', lw=3, ls='--', zorder=1)
-    ax2.axhline(y=-58 - 10, xmin=transition_fraction,
+    ax2.axhline(y=-90, xmin=transition_fraction,
                 xmax=1, color='k', lw=3, ls='--', zorder=1)
     #--
 
@@ -738,9 +738,9 @@ def make_plots(data, data_acqs, out_dir):
     ax4.axhline(y=-58, xmin=0, xmax=transition_fraction,
                 color='k', lw=3, ls='--', zorder=1)
 
-    ax4.axhline(y=58 - 40, xmin=transition_fraction, xmax=1,
+    ax4.axhline(y=90, xmin=transition_fraction, xmax=1,
                 color='k', lw=3, ls='--', zorder=1)
-    ax4.axhline(y=-58 - 40, xmin=transition_fraction,
+    ax4.axhline(y=-90, xmin=transition_fraction,
                 xmax=1, color='k', lw=3, ls='--', zorder=1)
     #--
     ax4.xaxis.set_ticklabels(['' for item in ax3.xaxis.get_ticklabels()])

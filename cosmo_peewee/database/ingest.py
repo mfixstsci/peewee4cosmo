@@ -34,8 +34,8 @@ from ..osm.monitor import monitor as osm_monitor
 from ..dark.monitor import monitor as dark_monitor
 from ..dark.monitor import pull_orbital_info
 
-#from ..fuv_temp.monitor import monitor as fuv_temp_monitor
-#from ..fuv_temp.monitor import pull_temp
+from ..stims.monitor import locate_stims
+from ..stims.monitor import stim_monitor
 
 #-------------------------------------------------------------------------------
 
@@ -64,6 +64,7 @@ def bulk_insert(table, data_source, debug=False):
     if debug:
         for item in data_source:
             try:
+                print(item)
                 table.insert(**item).execute()
             except IntegrityError as e:
                 print('IntegrityError:', e)
@@ -468,64 +469,28 @@ def populate_stims(num_cpu=2):
     database = get_database()
     database.connect()
 
-    files_to_add = (Observations.select()
+    files_to_add = (Files.select()
                             .where(
-                                Observations.filename.contains('%corrtag\_%.gz') & 
-                                Observations.filename.not_in(Stims.select(Stims.filename)) 
+                                Files.filename.contains('%corrtag\_%.gz') & 
+                                Files.filename.not_in(Stims.select(Stims.filename)) &
+                                Files.monitor_flag == True
                             ))
     database.close()
-
-    partial = functools.partial(bulk_insert,
+    
+    partial = functools.partial(pull_data,
                                 function=locate_stims)
     
     #-- pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=num_cpu)
-    data_to_insert = pool.map(partial, files_to_add)
     
-    if len(data_to_insert): 
-        #-- Pass to bulk insert.
-        bulk_insert(Stims, itertools.chain(*data_to_insert))
-
-#-------------------------------------------------------------------------------
-
-def populate_fuv_temp(num_cpu=2):
-    
-    """ Populate the fuv_temperture table
-    
-    Parameters
-    ----------
-    num_cpu: int
-        number of worker processes.
-
-    Returns
-    -------
-    None
-
-    """
-    
-    database = get_database()
-    database.connect()
-
-    files_to_add = (Observations.select(Observations.path, FUV_primary_headers.rootname)
-                         .join(FUV_primary_headers)
-                         .where(
-                             Observations.filename.contains('%rawtag_%') & 
-                             Observations.rootname.not_in(Fuv_Temp.select(Fuv_Temp.rootname))
-                         ))
-    
-    database.close()
-
-    partial = functools.partial(pull_data,
-                                function=pull_temp)
-    
-    #-- pool up the partials and pass it the iterable (files)
-    pool = mp.Pool(processes=num_cpu)
-    data_to_insert = pool.map(partial, files_to_add)
-    
-    # if len(data_to_insert):
-    #     #-- Pass to bulk insert.
-    #     bulk_insert(Rawacqs, itertools.chain(*data_to_insert))
-
+    #-- Add 100 files at a time...
+    step=100
+    for idx in range(0, len(list(files_to_add)), step):    
+        data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
+        
+        if len(data_to_insert):
+            #-- Pass to bulk insert.
+            bulk_insert(Stims, itertools.chain(*data_to_insert))
 #-------------------------------------------------------------------------------
 
 def ingest_all():
@@ -561,7 +526,8 @@ def ingest_all():
               FUVB_corr_headers,
               Lampflash,
               Rawacqs,
-              Darks]
+              Darks,
+              Stims]
 
     #-- Safe checks existance of tables first to make sure they dont get clobbered.
     database.create_tables(tables, safe=True)
@@ -615,9 +581,10 @@ def ingest_all():
     logger.info("POPULATING DARKS TABLE")
     populate_darks(settings['num_cpu'])
     
-    # #-- Populate FUV tempertures
-    # logger.info("POPULATING FUV TEMPERTURE TABLE")
-    # populate_fuv_temp(settings['num_cpu'])
+    #-- Populate FUV tempertures
+    logger.info("POPULATING STIM TABLE")
+    populate_stims(settings['num_cpu'])
+
 #-------------------------------------------------------------------------------
 
 def run_monitors():
@@ -634,7 +601,8 @@ def run_monitors():
     """
     setup_logging()
     
-    osm_monitor()
-    dark_monitor()
+    # osm_monitor()
+    # dark_monitor()
+    stim_monitor()
 
 #-------------------------------------------------------------------------------
