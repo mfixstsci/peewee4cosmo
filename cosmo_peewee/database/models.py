@@ -311,7 +311,7 @@ class Rawacqs(BaseModel):
 
 class Darks(BaseModel):
     """Record dark rate"""
-    
+
     filename = CharField(default='N/A')
     detector = CharField(default='N/A')
     date = FloatField(default=0.0)
@@ -359,3 +359,22 @@ class Stims(BaseModel):
         db_table = 'stims'
     
 #-------------------------------------------------------------------------------
+
+class Gain(BaseModel):
+    """Record location of all Gain"""
+    x = IntegerField()
+    y = IntegerField()
+    gain = FloatField(default=0)
+    counts = IntegerField(default=0)
+    std_dev = FloatField(default=0)
+    hv_lvl = IntegerField()
+    expstart = FloatField()
+    segment = CharField()
+
+    filename = ForeignKeyField(Files,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+    class Meta:
+        db_table = 'gain'

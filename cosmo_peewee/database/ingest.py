@@ -21,7 +21,7 @@ import multiprocessing as mp
 import numpy as np
 from .models import get_database, get_settings
 from .models import Files, NUV_corr_headers, FUVA_raw_headers, FUVB_raw_headers
-from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations
+from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations, Gain
 
 from .database_keys import nuv_corr_keys, fuva_raw_keys, fuvb_raw_keys
 from .database_keys import fuva_corr_keys, fuvb_corr_keys, obs_keys, file_keys
@@ -37,6 +37,7 @@ from ..dark.monitor import pull_orbital_info
 from ..stims.monitor import locate_stims
 from ..stims.monitor import stim_monitor
 
+from ..cci.gainmap import write_and_pull_gainmap
 #-------------------------------------------------------------------------------
 
 def bulk_insert(table, data_source, debug=False):
@@ -68,7 +69,7 @@ def bulk_insert(table, data_source, debug=False):
                 table.insert(**item).execute()
             except IntegrityError as e:
                 print('IntegrityError:', e)
-                print(item['rootname'])
+                print(item['filename'])
         database.close()
     
     #-- Bulk inserts.
@@ -493,6 +494,59 @@ def populate_stims(num_cpu=2):
             bulk_insert(Stims, itertools.chain(*data_to_insert))
 #-------------------------------------------------------------------------------
 
+def populate_gain(num_cpu=2):
+    
+    """ 
+    Populate gain table and create gainmaps
+    
+    Parameters
+    ----------
+    num_cpu: int
+        number of worker processes.
+
+    Returns
+    -------
+    None
+
+    """
+    
+    database = get_database()
+    database.connect()
+
+    files_to_add = (Files.select()
+                            .where(
+                                (Files.filename.contains('l\_%\_00\____\_cci.fits%') |
+                                Files.filename.contains('l\_%\_01\____\_cci.fits%')) & 
+                                Files.filename.not_in(Gain.select(Gain.filename)) &
+                                Files.monitor_flag == True
+                            ))
+
+    database.close()
+    
+    partial = functools.partial(pull_data,
+                                function=write_and_pull_gainmap)
+    
+    #-- pool up the partials and pass it the iterable (files)
+    pool = mp.Pool(processes=num_cpu)
+    print(len(files_to_add))
+    #-- Add 10 files at a time.
+    step=2
+    for idx in range(0, len(list(files_to_add)), step):
+        data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
+        bulk_insert(Gain, itertools.chain(*data_to_insert), debug=True)
+        
+    #     if len(data_to_insert):
+    #         #-- Pass to bulk insert.
+    #         bulk_insert(Gain, itertools.chain(*data_to_insert), debug=True)
+
+    #-- For testing
+    # files_to_add = Files.select().where(Files.filename.contains('l_2009226105625_01_167_cci.fits.gz'))
+    # database.close()
+    # data_to_insert = pool.map(partial, files_to_add)
+    # bulk_insert(Gain, itertools.chain(*data_to_insert))
+    #-- End testing
+#-------------------------------------------------------------------------------
+
 def ingest_all():
    
     """Create tables and run all ingestion scripts
@@ -527,7 +581,8 @@ def ingest_all():
               Lampflash,
               Rawacqs,
               Darks,
-              Stims]
+              Stims,
+              Gain]
 
     #-- Safe checks existance of tables first to make sure they dont get clobbered.
     database.create_tables(tables, safe=True)
@@ -581,9 +636,13 @@ def ingest_all():
     logger.info("POPULATING DARKS TABLE")
     populate_darks(settings['num_cpu'])
     
-    #-- Populate FUV tempertures
-    logger.info("POPULATING STIM TABLE")
-    populate_stims(settings['num_cpu'])
+    # #-- Populate Stim monitor
+    # logger.info("POPULATING STIM TABLE")
+    # #populate_stims(settings['num_cpu'])
+
+    #-- Populate gain monitor
+    logger.info("POPULATING GAIN TABLE")
+    populate_gain(settings['num_cpu'])
 
 #-------------------------------------------------------------------------------
 
@@ -601,8 +660,8 @@ def run_monitors():
     """
     setup_logging()
     
-    # osm_monitor()
-    # dark_monitor()
-    stim_monitor()
+    #osm_monitor()
+    dark_monitor()
+    #stim_monitor()
 
 #-------------------------------------------------------------------------------

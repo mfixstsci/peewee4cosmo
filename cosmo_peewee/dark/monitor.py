@@ -386,7 +386,6 @@ def make_plots(detector, base_dir, TA=False):
         logger.info("MAKING PLOTS FOR {}".format(detector))
 
     for key, segment in zip(search_strings, segments):
-        
         logger.debug('CREATING TIME PLOT FOR {}:{}'.format(segment, key))
         
         #-- Query for data here!
@@ -434,9 +433,12 @@ def make_plots(detector, base_dir, TA=False):
             else:
                 index = np.where( (date >= year) &
                                 (date < year + 1))
-                outname = os.path.join(base_dir, detector, '{}_hist_{}_{}.png'.format(dark_key, year, segment))
-                plot_histogram(dark[index], outname)
-    
+                hist_outname = os.path.join(base_dir, detector, '{}_hist_{}_{}.png'.format(dark_key, year, segment))
+                plot_histogram(dark[index], hist_outname)
+
+                inter_outname = os.path.join(base_dir, detector, '{}_interactive_{}_{}.html'.format(dark_key, year, segment))
+                interactive_plot_time(detector, dark[index], mjd[index], temp[index], solar_flux, solar_date, inter_outname)
+
         index = np.where(date >= date.max() - .5)
         outname = os.path.join(base_dir, detector, '{}_hist_-6mo_{}.png'.format(dark_key, segment))
         plot_histogram(dark[index], outname )

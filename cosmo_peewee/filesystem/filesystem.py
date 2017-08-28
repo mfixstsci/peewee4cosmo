@@ -24,7 +24,7 @@ def find_all_datasets(top_dir, processes=2):
 
     for item in os.listdir(top_dir):
         full_path = os.path.join(top_dir, item)
-        pattern = re.compile('(\d{5})')
+        pattern = re.compile('(\d{5})|CCI')
         if pattern.match(item) is not None:
             top_levels.append(full_path)
 

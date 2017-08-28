@@ -49,6 +49,9 @@ from .constants import *
 if sys.version_info.major == 2:
     from itertools import izip as zip
 
+from ..database.models import get_database, get_settings
+
+from copy import deepcopy
 #------------------------------------------------------------
 
 class CCI:
@@ -186,9 +189,9 @@ class CCI:
 
         if self.expstart:
             #-- Finds to most recently created HVTAB
-            hvtable_list = glob.glob(os.path.join(os.environ['lref'], '*hv.fits'))
+            settings = get_settings()
+            hvtable_list = glob.glob(os.path.join(settings['lref'], '*hv.fits'))
             HVTAB = hvtable_list[np.array([fits.getval(item, 'DATE') for item in hvtable_list]).argmax()]
-
             hvtab = fits.open(HVTAB)
 
             if self.segment == 'FUVA':
@@ -198,7 +201,7 @@ class CCI:
 
         self.file_list = [line[0].decode("utf-8") for line in hdu[1].data]
 
-        self.big_array = np.array([rebin(hdu[i+2].read(), bins=(self.ybinning, self.xbinning)) for i in range(32)])
+        self.big_array = np.array([rebin(hdu[i+2].data, bins=(self.ybinning, self.xbinning)) for i in range(32)])
         self.get_counts(self.big_array)
         self.extracted_charge = self.pha_to_coulombs(self.big_array)
 
@@ -264,7 +267,7 @@ class CCI:
         out_name = out_name or self.cci_name + '_gainmap.fits'
 
         if os.path.exists(out_name):
-            print("not clobbering existing file")
+            print("{} EXISTS, NOT CLOBBERING".format(out_name))
             return
 
         #-------Ext=0
@@ -733,7 +736,7 @@ def fit_ok(fit, fitter, start_mean, start_amp, start_std):
 
 #-------------------------------------------------------------------------------
 
-def write_and_pull_gainmap(cci_name, out_dir=None):
+def write_and_pull_gainmap(cci_name, out_dir='None'):
     """Make modal gainmap for cos cumulative image.
 
     """
@@ -755,30 +758,35 @@ def write_and_pull_gainmap(cci_name, out_dir=None):
     #             current.big_array[:, y, x] += prev_dist
 
     
-    #-- Call CCI Class
-    current = CCI(cci_name, xbinning=X_BINNING, ybinning=Y_BINNING)
-    out_name = os.path.join(out_dir, os.path.basename(cci_name.replace('.fits', '_gainmap.fits')))
+    #-- Get settings
+    settings = get_settings()
 
-    logger.debug("writing gainmap to {}".format(out_name))
+    #-- Set output directory for gainmaps.
+    out_dir = os.path.join(settings['monitor_location'],'CCI')
+    
+    #-- Set full file_path from peewee object and run CCI class to obtain gainmap
+    full_path = os.path.join(cci_name.path, cci_name.filename)
+    current = CCI(full_path, xbinning=X_BINNING, ybinning=Y_BINNING)
+    out_name = os.path.join(out_dir, os.path.basename(full_path.replace('.fits.gz', '_gainmap.fits.gz')))
+
+    logger.debug("WRITING GAINMAP TO: {}".format(out_name))
     current.write(out_name)
 
     index = np.where(current.gain_image > 0)
 
-    info = {'segment': current.segment,
+    info = {'filename': os.path.basename(full_path),
+            'segment': current.segment,
             'hv_lvl': int(current.dethv),
             'expstart': round(current.expstart, 5)}
 
-    if not len(index[0]):
-        yield info
-    else:
-        for y, x in zip(*index):
-            info['gain'] = round(float(current.gain_image[y, x]), 3)
-            info['counts'] = round(float(current.counts_image[y, x]), 3)
-            info['std_dev'] = round(float(current.std_image[y, x]), 3)
-            info['x'] = int(x)
-            info['y'] = int(y)
+    for y, x in zip(*index):
+        info['gain'] = round(float(current.gain_image[y, x]), 3)
+        info['counts'] = round(float(current.counts_image[y, x]), 3)
+        info['std_dev'] = round(float(current.std_image[y, x]), 3)
+        info['x'] = int(x)
+        info['y'] = int(y)
 
-            yield info
+        yield deepcopy(info)
 
 
     """

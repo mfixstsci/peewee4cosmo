@@ -125,7 +125,7 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
         expstart = hdu[1].header['expstart']
         segment = hdu[0].header['segment']
 
-        stim_info = {'filename': hdu[0].header['filename'],
+        stim_info = {'filename': file_name,
                      'rootname': hdu[0].header['rootname'],
                      'proposid': hdu[0].header['proposid'],
                      'segment': segment}
@@ -651,7 +651,7 @@ def make_plots(out_dir, connection_string):
 
             query = Stims.raw('SELECT abs_time, %s FROM stims WHERE segment = %s', (column,segment))
             
-            data = [line for line in engine.execute(query)]
+            data = [line for line in database.execute_sql(query)]
             times = [line[0] for line in data]
             coords = [line[1] for line in data]
             ax.plot(times, coords, 'o')
@@ -975,11 +975,8 @@ def stim_monitor():
     # missing_obs, missing_dates = find_missing()
     # send_email(missing_obs, missing_dates)
 
-    make_plots(monitor_dir, settings['connection_string'])
-
-    # move_to_web(monitor_dir, webpage_dir)
     # check_individual(monitor_dir, settings['connection_string'])
-
+    make_plots(monitor_dir, settings['connection_string'])
     interactive_plotting()
-
+    move_to_web(monitor_dir, webpage_dir)
     logger.info("Finished Monitor")
