@@ -21,7 +21,7 @@ import multiprocessing as mp
 import numpy as np
 from .models import get_database, get_settings
 from .models import Files, NUV_corr_headers, FUVA_raw_headers, FUVB_raw_headers
-from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations, Gain
+from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations, Gain, Flagged_Pixels
 
 from .database_keys import nuv_corr_keys, fuva_raw_keys, fuvb_raw_keys
 from .database_keys import fuva_corr_keys, fuvb_corr_keys, obs_keys, file_keys
@@ -38,6 +38,7 @@ from ..stims.monitor import locate_stims
 from ..stims.monitor import stim_monitor
 
 from ..cci.gainmap import write_and_pull_gainmap
+from ..cci.gainsag import main as cci_main
 #-------------------------------------------------------------------------------
 
 def bulk_insert(table, data_source, debug=False):
@@ -248,7 +249,7 @@ def populate_files(settings):
     #-- Seems to be the best method but don't know how to get it to work...
     if len(data_to_insert):
         #-- Little if else logic to avoid Integrity Errors not allowing good files to be ingested
-        if len(files_to_add) < 6000:
+        if len(files_to_add) < 10000:
             step = 1
         else:
             step = 100
@@ -515,36 +516,31 @@ def populate_gain(num_cpu=2):
 
     files_to_add = (Files.select()
                             .where(
-                                (Files.filename.contains('l\_%\_00\____\_cci.fits%') |
-                                Files.filename.contains('l\_%\_01\____\_cci.fits%')) & 
-                                Files.filename.not_in(Gain.select(Gain.filename)) &
+                               (Files.filename.contains('l\_%\_00\____\_cci.fits%') |
+                                Files.filename.contains('l\_%\_01\____\_cci.fits%')) &
+                                Files.filename.not_in(Gain.select(Gain.filename)) & 
                                 Files.monitor_flag == True
                             ))
 
     database.close()
     
+    for f in files_to_add:
+    	print(f.filename)
+    
     partial = functools.partial(pull_data,
                                 function=write_and_pull_gainmap)
-    
+
     #-- pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=num_cpu)
-    print(len(files_to_add))
-    #-- Add 10 files at a time.
-    step=2
-    for idx in range(0, len(list(files_to_add)), step):
-        data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
-        bulk_insert(Gain, itertools.chain(*data_to_insert), debug=True)
-        
-    #     if len(data_to_insert):
-    #         #-- Pass to bulk insert.
-    #         bulk_insert(Gain, itertools.chain(*data_to_insert), debug=True)
 
-    #-- For testing
-    # files_to_add = Files.select().where(Files.filename.contains('l_2009226105625_01_167_cci.fits.gz'))
-    # database.close()
-    # data_to_insert = pool.map(partial, files_to_add)
-    # bulk_insert(Gain, itertools.chain(*data_to_insert))
-    #-- End testing
+    #-- Add 10 files at a time.
+    step=1
+    for idx in range(0, len(list(files_to_add)), step):
+    	data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
+    	
+    	if len(data_to_insert):
+	   		bulk_insert(Gain, itertools.chain(*data_to_insert))
+    
 #-------------------------------------------------------------------------------
 
 def ingest_all():
@@ -582,7 +578,8 @@ def ingest_all():
               Rawacqs,
               Darks,
               Stims,
-              Gain]
+              Gain,
+              Flagged_Pixels]
 
     #-- Safe checks existance of tables first to make sure they dont get clobbered.
     database.create_tables(tables, safe=True)
@@ -636,14 +633,13 @@ def ingest_all():
     logger.info("POPULATING DARKS TABLE")
     populate_darks(settings['num_cpu'])
     
-    # #-- Populate Stim monitor
-    # logger.info("POPULATING STIM TABLE")
-    # #populate_stims(settings['num_cpu'])
+    #-- Populate Stim monitor
+    logger.info("POPULATING STIM TABLE")
+    populate_stims(settings['num_cpu'])
 
     #-- Populate gain monitor
     logger.info("POPULATING GAIN TABLE")
     populate_gain(settings['num_cpu'])
-
 #-------------------------------------------------------------------------------
 
 def run_monitors():
@@ -660,8 +656,9 @@ def run_monitors():
     """
     setup_logging()
     
-    #osm_monitor()
+    osm_monitor()
     dark_monitor()
-    #stim_monitor()
+    stim_monitor()
+    cci_main(os.environ['HOME'])
 
 #-------------------------------------------------------------------------------

@@ -33,6 +33,7 @@ import gzip
 import glob
 import logging
 logger = logging.getLogger(__name__)
+import time
 
 from astropy.io import fits
 from astropy.modeling import models, fitting
@@ -49,13 +50,14 @@ from .constants import *
 if sys.version_info.major == 2:
     from itertools import izip as zip
 
-from ..database.models import get_database, get_settings
+from ..database.models import get_database, get_settings, Files
 
 from copy import deepcopy
 #------------------------------------------------------------
 
 class CCI:
-    """Creates a cci_object designed for use in the monitor.
+    """
+    Creates a cci_object designed for use in the monitor.
 
     Each COS cumulative image fits file is made into its
     own cci_object where the data is more easily used.
@@ -74,7 +76,6 @@ class CCI:
         self.ybinning = kwargs.get('ybinning', 1)
 
         #-- For a super pixel, it must have atleast 30 counts to be considered for fitting.
-        #--                                 -------
         self.mincounts = kwargs.get('mincounts', 30)
 
         #-- Strip the path off of filename
@@ -90,11 +91,32 @@ class CCI:
         self.cci_name = cci_name
 
         #-- Open the file.
-        self.open_fits()
+        try:
+        	self.open_fits()
+        except:
+            print('COULD NOT COMPLETE open_fits METHOD IN CCI FOR {}'.format(self.input_file))
+            database = get_database()
+            database.connect()
 
+            query = Files.update(monitor_flag=0).where(Files.filename==os.path.basename(self.input_file))
+            query.execute()
+
+            database.close()
+
+            return
+         	
         #-- CCI's are comprised of ~ 1 week of COS exposure time
         #-- We want to make sure that the CCI actually has COS exposures in it.
         if not self.numfiles:
+            print('numfiles IS EMPTY, NO DATA IN CCI {}'.format(self.input_file))
+            database = get_database()
+            database.connect()
+            
+            query = Files.update(monitor_flag=0).where(Files.filename==os.path.basename(self.input_file))
+            query.execute()
+            
+            database.close()
+            
             return
 
         #-- CCI's are 3 dimensional (x, y, PHA). For each x,y pixel position there are
@@ -200,10 +222,10 @@ class CCI:
                 hv_string = 'HVLEVELB'
 
         self.file_list = [line[0].decode("utf-8") for line in hdu[1].data]
-
         self.big_array = np.array([rebin(hdu[i+2].data, bins=(self.ybinning, self.xbinning)) for i in range(32)])
         self.get_counts(self.big_array)
         self.extracted_charge = self.pha_to_coulombs(self.big_array)
+        
 
         self.gain_image = np.zeros((YLEN, XLEN))
         self.modal_gain_width = np.zeros((YLEN, XLEN))
@@ -212,6 +234,7 @@ class CCI:
         self.cnt01_01 = len(self.big_array[1].nonzero()[0])
         self.cnt02_30 = len(self.big_array[2:31].nonzero()[0])
         self.cnt31_31 = len(self.big_array[31:].nonzero()[0])
+        
 
     def get_counts(self, in_array):
         """collapse pha arrays to get total counts accross all
@@ -222,9 +245,9 @@ class CCI:
 
         out_array = np.sum(in_array, axis=0)
 
-        ###Test before implementation
-        ###Should only effect counts and charge extensions.
-        ### no implications for modal gain arrays or measurements
+        #-- Test before implementation
+        #-- Should only effect counts and charge extensions.
+        #-- no implications for modal gain arrays or measurements
         if self.segment == 'FUVA':
             accum_name = self.cci_name.replace('00_','02_')  ##change when using OPUS data
         elif self.segment == 'FUVB':
@@ -244,7 +267,6 @@ class CCI:
 
     def pha_to_coulombs(self, in_array):
         """Convert pha to picocoloumbs to calculate extracted charge.
-
         Equation comes from D. Sahnow.
         """
 
@@ -330,409 +352,132 @@ class CCI:
         hdu_out.append(fits.ImageHDU(data=self.big_array[31]))
         hdu_out[8].header['EXTNAME'] = 'cnt31_31'
 
-
         #-------Write to file
         hdu_out.writeto(out_name)
         hdu_out.close()
 
-#------------------------------------------------------------
-
-def rename(input_file, mode='move'):
-    """Rename CCI file from old to new naming convention
-
-    Parameters
-    ----------
-    input_file : str
-        Old-style CCI file
-    mode : str, optional
-        if 'move', the original file will be removed.  Otherwise, simply the new
-        name will be printed and returned.
-
-    Returns
-    -------
-    outname : str
-        Name in the new naming convention.
-    """
-
-    options = ['copy', 'move', 'print']
-    if not mode in options:
-        raise ValueError("mode: {} must be in {}".format(mode, options))
-
-    with fits.open(input_file) as hdu:
-        path, name = os.path.split(input_file)
-        name_split = name.split('_')
-
-        dethv = int(hdu[0].header['DETHV'])
-
-        time_str = name_split[1]
-        filetype = name_split[0][3:]
-
-        ext = ''
-        if '.fits' in name:
-            ext += '.fits'
-        if '.gz' in name:
-            ext += '.gz'
-
-
-        if hdu[0].header['DETECTOR'] == 'FUV':
-            if dethv == -1:
-                dethv = 999
-            out_name = 'l_{}_{}_{}_cci{}'.format(time_str, filetype, int(dethv), ext)
-
-        elif hdu[0].header['DETECTOR'] == 'NUV':
-            out_name = 'l_{}_{}_cci{}'.format(time_str, filetype, ext)
-
-        out_file = os.path.join(path, out_name)
-
-        if mode == 'copy':
-            hdu.writeto(out_name)
-
-    if mode == 'print':
-        print(out_name)
-    elif mode == 'move':
-        print("{} --> {}".format(input_file, out_name))
-        shutil.move(input_file, out_name)
-
-    return out_name
-
 #-------------------------------------------------------------------------------
 
-def read_brftab(filename, segment):
-    """Parse Baseline Reference Table for needed information
+def make_total_gainmap(hv_lvl, gainmap_dir=None, segment='FUV', start_mjd=55055, end_mjd=70000, reverse=False):
 
-    Reads the active area for the specified segment from the COS BRFTAB
-    (Baseline Reference Table).  The four corners (left, right, top, bottom)
-    of the active area are returned.
-
-    Parameters
-    ----------
-    filename : str
-        Input BRFTAB
-    segment : str
-        'FUVA' or 'FUVB', which segment to parse from
-
-    Returns
-    -------
-    corners : tuple
-        left, right, top, bottom corners of the active area
-    """
-
-    with fits.open(filename) as hdu:
-        index = np.where(hdu[1].data['segment'] == segment)[0]
-
-        left = hdu[1].data[index]['A_LEFT']
-        right = hdu[1].data[index]['A_RIGHT']
-        top = hdu[1].data[index]['A_HIGH']
-        bottom = hdu[1].data[index]['A_LOW']
-
-    return left[0], right[0], top[0], bottom[0]
-
-#-------------------------------------------------------------------------------
-
-def read_spottab(filename, segment, expstart, expend):
-    """Parse the COS spottab
-
-    Parameters
-    ----------
-    filename : str
-        Input SPOTTAB fits file
-    segment : str
-        'FUVA' or 'FUVB', which segment to parse from
-    expstart : float, int
-        return only rows with STOP > expstart
-    expend : float, int
-        return only rows with START < expend
-
-    Returns
-    -------
-
-
-    """
-    with fits.open(filename) as hdu:
-        index = np.where((hdu[1].data['SEGMENT'] == segment) &
-                         (hdu[1].data['START'] < expend) &
-                         (hdu[1].data['STOP'] > expstart))[0]
-
-        rows = hdu[1].data[index]
-
-        return zip(rows['LX'], rows['LY'], rows['DX'], rows['DY'])
-
-#-------------------------------------------------------------------------------
-
-def make_all_hv_maps():
-    for hv in range(150, 179):
-        tmp_hdu = fits.open(os.path.join( MONITOR_DIR, 'total_gain.fits'))
-        for ext in (1, 2):
-            tmp_hdu[ext].data -= .393 * (float(178) - hv)
-        tmp_hdu.writeto( os.path.join( MONITOR_DIR, 'total_gain_%d.fits' % hv ), clobber=True )
-        print('WRITING  total_gain_{}.fits TO {}'.format(hv, MONITOR_DIR))
-
-#-------------------------------------------------------------------------------
-
-def make_total_gain(gainmap_dir=None, segment='FUV', start_mjd=55055, end_mjd=70000, min_hv=163, max_hv=175, reverse=False):
+    #-- Depending on the segment, the filename are different.
     if segment == 'FUVA':
-        search_string = 'l_*_00_???_cci_gainmap.fits'
+        search_string = 'l_*_00_{}_cci_gainmap.fits*'.format(hv_lvl)
     elif segment == 'FUVB':
-        search_string = 'l_*_01_???_cci_gainmap.fits'
+        search_string = 'l_*_01_{}_cci_gainmap.fits*'.format(hv_lvl)
 
-
+    #-- Get all of the data and sort.
     all_datasets = [item for item in glob.glob(os.path.join(gainmap_dir, search_string))]
-
-    if not len(all_datasets):
-        search_string = search_string + '.gz'
-        all_datasets = [item for item in glob.glob(os.path.join(gainmap_dir, search_string))]
-
     all_datasets.sort()
-
-    print("Combining {} datasets".format(len(all_datasets)))
-
+    
+    #-- Switch the order to reverse to see what the detector originally looked like.
     if reverse:
         all_datasets = all_datasets[::-1]
 
+    #-- Make an empty array the size of the detector.
     out_data = np.zeros((YLEN, XLEN))
 
+    #-- For each gainmap
     for item in all_datasets:
-
+        
         cci_hdu = fits.open(item)
+
+        #-- Make sure you are making a total gainmap in the dates you defined.
         if not cci_hdu[0].header['EXPSTART'] >= start_mjd:
             continue
         if not cci_hdu[0].header['EXPSTART'] <= end_mjd:
             continue
-
-        if not cci_hdu[0].header['DETHV'] >= min_hv:
-            continue
-        if not cci_hdu[0].header['DETHV'] <= max_hv:
-            continue
-
+        
+        #-- Get the data
         cci_data = cci_hdu['MOD_GAIN'].data
-
+        
+        #-- Find where there is data 
+        index = np.where(cci_data)
+        
+        #-- get the high voltage level.
         dethv = cci_hdu[0].header['DETHV']
 
-        index = np.where(cci_data)
-        #cci_data[index] += .393 * (float(178) - dethv)
-
-        index_both = np.where((cci_data > 0) & (out_data > 0))
-        #mean_data = np.mean([cci_data, out_data], axis=0)
-
+        #-- Add the data to the array and move to the next gainmap.
         out_data[index] = cci_data[index]
-        #out_data[index_both] = mean_data[index_both]
 
     return enlarge(out_data, x=X_BINNING, y=Y_BINNING)
 
-#------------------------------------------------------------
+#-------------------------------------------------------------------------------
+def make_all_gainmaps(gainmap_dir, start_mjd=55055, end_mjd=70000, total=False):
+    """
+    Make all of the total gainmaps.
 
-def make_all_gainmaps_entry():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-f",
-                        '--filename',
-                        type=str,
-                        default='total_gain.fits',
-                        help="Filename to write gain file to")
-
-    parser.add_argument("-d",
-                        '--dir',
-                        type=str,
-                        default='/grp/hst/cos/Monitors/CCI/',
-                        help="directory containing the gainmaps")
-
-    parser.add_argument("-s",
-                        '--start',
-                        type=float,
-                        default=55055.0,
-                        help="MJD of the first gainmap to include")
-
-    parser.add_argument("-e",
-                        '--end',
-                        type=float,
-                        default=70000,
-                        help="MJD of the last gainmap to include")
-
-    parser.add_argument('--hvmin',
-                        type=int,
-                        default=163,
-                        help="Minimum DETHVS of gainmaps to include")
-
-
-    parser.add_argument('--hvmax',
-                        type=int,
-                        default=175,
-                        help="Maximum DETHV of gainmaps to include.")
-
-
-    args = parser.parse_args()
-
-    print("Creating all gainmaps using:")
-    print(args)
-    make_all_gainmaps(filename=args.filename,
-                      gainmap_dir=args.dir,
-                      start_mjd=args.start,
-                      end_mjd=args.end,
-                      min_hv=args.hvmin,
-                      max_hv=args.hvmax)
-
-#------------------------------------------------------------
-
-def make_all_gainmaps(filename, gainmap_dir, start_mjd=55055, end_mjd=70000, min_hv=163, max_hv=175):
+    Parameters
+    ----------
+    gainmap_dir: str
+        Directory of where the gainmaps live
+    start_mjd: int
+        Start date of for gainmaps you want to build. (Default will catch first gainmap)
+    end_mjd: int
+        End date that gainmaps should have. (Default will be date way after recent gainmap)
+    total: bool
+        Make gainmap from all HV levels. 
     """
 
-    """
+    if total:
+        filename = os.path.join(gainmap_dir,'total_gain.fits')
+        hdu_out = fits.HDUList(fits.PrimaryHDU())
 
-    #add_cumulative_data(ending)
+        #-- Adding primary header with file specifications to make results reproducible
 
-    hdu_out = fits.HDUList(fits.PrimaryHDU())
+        hdu_out[0].header['TELESCOP'] = 'HST'
+        hdu_out[0].header['INSTRUME'] = 'COS'
+        hdu_out[0].header['DETECTOR'] = 'FUV'
+        hdu_out[0].header['OPT_ELEM'] = 'ANY'
+        hdu_out[0].header['FILETYPE'] = 'GAINMAP'
 
-    #-- Adding primary header with file specifications to make results reproducible
+        hdu_out[0].header['EXPSTART'] = start_mjd
+        hdu_out[0].header['EXP_END'] = end_mjd
+        hdu_out[0].header['CCI_DIR'] = gainmap_dir
+        hdu_out[0].header['HVLEVEL'] = 'ALL'
+        hdu_out[0].header['DATEMADE'] = (time.strftime("%d/%m/%Y"))
 
-    hdu_out[0].header['TELESCOP'] = 'HST'
-    hdu_out[0].header['INSTRUME'] = 'COS'
-    hdu_out[0].header['DETECTOR'] = 'FUV'
-    hdu_out[0].header['OPT_ELEM'] = 'ANY'
-    hdu_out[0].header['FILETYPE'] = 'GAINMAP'
+        #-- Data ext
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', gainmap_dir, 'FUVA', start_mjd, end_mjd, reverse=True)))
+        hdu_out[1].header['EXTNAME'] = 'FUVAINIT'
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', gainmap_dir, 'FUVB', start_mjd, end_mjd, reverse=True)))
+        hdu_out[2].header['EXTNAME'] = 'FUVBINIT'
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', gainmap_dir, 'FUVA', start_mjd, end_mjd)))
+        hdu_out[3].header['EXTNAME'] = 'FUVALAST'
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', gainmap_dir, 'FUVB', start_mjd, end_mjd)))
+        hdu_out[4].header['EXTNAME'] = 'FUVBLAST'
+        hdu_out.writeto(filename, clobber=True)
+        hdu_out.close()
+    else:
+        for hv in range(150, 179):
+            filename = os.path.join(gainmap_dir,'total_gain_{}.fits'.format(hv))
+            hdu_out = fits.HDUList(fits.PrimaryHDU())
 
-    hdu_out[0].header['EXPSTART'] = start_mjd
-    hdu_out[0].header['EXP_END'] = end_mjd
-    hdu_out[0].header['MIN_HV'] = min_hv
-    hdu_out[0].header['MAX_HV'] = max_hv
-    hdu_out[0].header['CCI_DIR'] = gainmap_dir
+            #-- Adding primary header with file specifications to make results reproducible
 
-    #-- Data ext
-    hdu_out.append(fits.ImageHDU(data=make_total_gain(gainmap_dir, 'FUVA', start_mjd, end_mjd, min_hv, max_hv, reverse=True)))
-    hdu_out[1].header['EXTNAME'] = 'FUVAINIT'
-    hdu_out.append(fits.ImageHDU(data=make_total_gain(gainmap_dir, 'FUVB', start_mjd, end_mjd, min_hv, max_hv,  reverse=True)))
-    hdu_out[2].header['EXTNAME'] = 'FUVBINIT'
-    hdu_out.append(fits.ImageHDU(data=make_total_gain(gainmap_dir, 'FUVA', start_mjd, end_mjd, min_hv, max_hv)))
-    hdu_out[3].header['EXTNAME'] = 'FUVALAST'
-    hdu_out.append(fits.ImageHDU(data=make_total_gain(gainmap_dir, 'FUVB', start_mjd, end_mjd, min_hv, max_hv)))
-    hdu_out[4].header['EXTNAME'] = 'FUVBLAST'
-    hdu_out.writeto(filename, clobber=True)
-    hdu_out.close()
+            hdu_out[0].header['TELESCOP'] = 'HST'
+            hdu_out[0].header['INSTRUME'] = 'COS'
+            hdu_out[0].header['DETECTOR'] = 'FUV'
+            hdu_out[0].header['OPT_ELEM'] = 'ANY'
+            hdu_out[0].header['FILETYPE'] = 'GAINMAP'
 
-    print('Making ALL HV Maps')
-    ###make_all_hv_maps()
+            hdu_out[0].header['EXPSTART'] = start_mjd
+            hdu_out[0].header['EXP_END'] = end_mjd
+            hdu_out[0].header['CCI_DIR'] = gainmap_dir
+            hdu_out[0].header['HVLEVEL'] = hv
+            hdu_out[0].header['DATEMADE'] = (time.strftime("%d/%m/%Y"))
 
-
-#------------------------------------------------------------
-
-def add_cumulative_data(ending):
-    """add cumulative counts and charge to each file
-    Will overwrite current data, so if files are added
-    in middle of list, they should be accounted for.
-    """
-    data_list = glob.glob(os.path.join(MONITOR_DIR,'*%s*gainmap.fits'%ending))
-    data_list.sort()
-    print('Adding cumulative data to gainmaps for %s'%(ending))
-    shape = fits.getdata(data_list[0], ext=('MOD_GAIN', 1)).shape
-    total_counts = np.zeros(shape)
-    total_charge = np.zeros(shape)
-
-    for cci_name in data_list:
-        hdu = fits.open(cci_name, mode='update')
-        #-- Add nothing if extension.data is None
-        try:
-            hdu['counts'].data
-            hdu['charge'].data
-            print("Skipping")
-        except AttributeError:
-            continue
-
-        total_counts += hdu['COUNTS'].data
-        total_charge += hdu['CHARGE'].data
-
-        ext_names = [ext.name for ext in hdu]
-
-        if 'CUMLCNTS' in ext_names:
-            hdu['CUMLCNTS'].data = total_counts
-        else:
-            head_to_add = fits.Header()
-            head_to_add.update('EXTNAME', 'CUMLCNTS')
-            hdu.append(fits.ImageHDU(header=head_to_add, data=total_counts))
-
-        if 'CUMLCHRG' in ext_names:
-            hdu['CUMLCHRG'].data = total_charge
-        else:
-            head_to_add = fits.Header()
-            head_to_add.update('EXTNAME', 'CUMLCHRG')
-            hdu.append(fits.ImageHDU(header=head_to_add, data=total_charge))
-
-        hdu.flush()
-        hdu.close()
-
-#------------------------------------------------------------
-
-def measure_gainimage(data_cube, mincounts=30, phlow=1, phhigh=31):
-    """ measure the modal gain at each pixel
-
-    returns a 2d gainmap
-
-    """
-
-    # Suppress certain pharanges
-    for i in list(range(0, phlow+1)) + list(range(phhigh, len(data_cube))):
-        data_cube[i] = 0
-
-    counts_im = np.sum(data_cube, axis=0)
-
-    out_gain = np.zeros(counts_im.shape)
-    out_counts = np.zeros(counts_im.shape)
-    out_std = np.zeros(counts_im.shape)
-
-    index_search = np.where(counts_im >= mincounts)
-    if not len(index_search):
-        return out_gain, out_counts, out_std
-
-    for y, x in zip(*index_search):
-        dist = data_cube[:, y, x]
-
-        g, fit_g, success = fit_distribution(dist)
-
-        if not success:
-            continue
-
-        #-- double-check
-        if g.mean.value <= 3:
-            sub_dist = dist - g(np.arange(len(dist)))
-            sub_dist[sub_dist < 0] = 0
-
-            g2, fit2_g, success = fit_distribution(sub_dist, start_mean=15)
-
-            if success and abs(g2.mean.value - g.mean.value) > 1:
-                continue
-
-        out_gain[y, x] = g.mean.value
-        out_counts[y, x] = dist.sum()
-        out_std[y, x] = g.stddev.value
-
-
-    return out_gain, out_counts, out_std
-
-#------------------------------------------------------------
-
-def fit_ok(fit, fitter, start_mean, start_amp, start_std):
-
-    #-- Check for success in the LevMarLSQ fitting
-    if not fitter.fit_info['ierr'] in [1, 2, 3, 4]:
-        return False
-
-    #-- If the peak is too low
-    if fit.amplitude.value < 12:
-        return False
-
-    if not fit.stddev.value:
-        return False
-
-    #-- Check if fitting stayed at initial
-    if not (start_mean - fit.mean.value):
-        return False
-    if not (start_amp - fit.amplitude.value):
-        return False
-
-    #-- Not sure this is possible, but checking anyway
-    if np.isnan(fit.mean.value):
-        return False
-    if (fit.mean.value <= 0) or (fit.mean.value >= 31):
-        return False
-
-    return True
+            #-- Data ext
+            hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv, gainmap_dir, 'FUVA', start_mjd, end_mjd, reverse=True)))
+            hdu_out[1].header['EXTNAME'] = 'FUVAINIT'
+            hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv, gainmap_dir, 'FUVB', start_mjd, end_mjd, reverse=True)))
+            hdu_out[2].header['EXTNAME'] = 'FUVBINIT'
+            hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv, gainmap_dir, 'FUVA', start_mjd, end_mjd)))
+            hdu_out[3].header['EXTNAME'] = 'FUVALAST'
+            hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv, gainmap_dir, 'FUVB', start_mjd, end_mjd)))
+            hdu_out[4].header['EXTNAME'] = 'FUVBLAST'
+            hdu_out.writeto(filename, clobber=True)
+            hdu_out.close()
 
 #-------------------------------------------------------------------------------
 
@@ -741,23 +486,6 @@ def write_and_pull_gainmap(cci_name, out_dir='None'):
 
     """
 
-    # #-- Disabling lookback
-    # previous_list = []###get_previous(current)
-
-    # mincounts = 30
-    # print 'Adding in previous data to distributions'
-    # for past_CCI in previous_list:
-    #     print past_CCI.cci_name
-    #     index = np.where(np.sum(current.big_array[1:31], axis=0) <= mincounts)
-
-    #     for y, x in zip(*index):
-    #         prev_dist = past_CCI.big_array[:, y, x]
-    #         if prev_dist.sum() > mincounts:
-    #             continue
-    #         else:
-    #             current.big_array[:, y, x] += prev_dist
-
-    
     #-- Get settings
     settings = get_settings()
 
@@ -778,7 +506,9 @@ def write_and_pull_gainmap(cci_name, out_dir='None'):
             'segment': current.segment,
             'hv_lvl': int(current.dethv),
             'expstart': round(current.expstart, 5)}
-
+    
+    #-- If the y indices are empty, x will be empty as well.
+    #-- Just make an entry that is zeros.
     for y, x in zip(*index):
         info['gain'] = round(float(current.gain_image[y, x]), 3)
         info['counts'] = round(float(current.counts_image[y, x]), 3)
@@ -787,165 +517,5 @@ def write_and_pull_gainmap(cci_name, out_dir='None'):
         info['y'] = int(y)
 
         yield deepcopy(info)
-
-
-    """
-    if current.accum_data:
-        current.extracted_charge += current.accum_data*(1.0e-12*10**((gain_image-11.75)/20.5))
-
-                if gain_flag == '':
-                    gain_flag = 'fine'
-                    fit_modal_gain = fit_center
-                    fit_gain_width = fit_std
-
-                    current.gain_image[y,x] = fit_modal_gain
-                    current.modal_gain_width[y,x] = fit_gain_width
-
-                    if fit_center > 21:
-                        print '##########################'
-                        print 'WARNING  MODAL GAIN: %3.2f'%(fit_center)
-                        print 'Modal gain has been measured to be greater than 21. '
-                        print 'PHA upper limit of 23 may cause flux to be lost.'
-                        print '##########################'
-                        send_email( subject='CCI high modal gain found',
-                                    message='Modal gain of %3.2f found on segment %s at (x,y,MJD) %d,%d,%5.5f'%(fit_center,current.KW_SEGMENT,x,y,current.KW_EXPSTART) )
-    """
-
-#-------------------------------------------------------------------------------
-
-def fit_distribution(dist, start_mean=None, start_amp=None, start_std=None):
-
-    x_vals = np.arange(len(dist))
-
-    start_mean = start_mean or dist.argmax()
-    start_amp = start_amp or int(max(dist))
-    start_std = start_std or 1.05
-
-    g_init = models.Gaussian1D(amplitude=start_amp,
-                               mean=start_mean,
-                               stddev=start_std,
-                               bounds={'mean': [1, 30]})
-    g_init.stddev.fixed = True
-
-    fit_g = fitting.LevMarLSQFitter()
-    g = fit_g(g_init, x_vals, dist)
-
-    success = fit_ok(g, fit_g, start_mean, start_amp, start_std)
-
-    return g, fit_g, success
-
-#------------------------------------------------------------
-
-def get_previous(current_cci):
-    """Populates list of CCI objects.
-
-    A list of cci_objects with the same DETHV and within
-    NUM_DAYS_PREVIOUS before current_cci will be created.
-
-    Parameters
-    ----------
-    current_cci: cci object
-        the current cci_object
-
-    Returns
-    -------
-    output: list
-        list of previous cci_objects
-    """
-
-    #---Lookback_time
-    NUM_DAYS_PREVIOUS = 7.1  ##Just in case something is really close
-
-    out_list=[]
-
-    print('Retrieving data from previous CCIs:')
-    print('-----------------------------------')
-
-    dethv = current_cci.KW_DETHV
-    expstart = current_cci.KW_EXPSTART
-    segment = current_cci.KW_SEGMENT
-    cci_name = current_cci.input_file
-
-    if ((not NUM_DAYS_PREVIOUS) or (not expstart)):
-        print('None to find')
-        return out_list
-
-    path,file_name = os.path.split(cci_name)
-    if segment == 'FUVA':
-        ending = '*' + FUVA_string + '*'
-    elif segment == 'FUVB':
-        ending = '*' + FUVB_string + '*'
-    else:
-        print('Error, segment error in %s'%(file_name))
-        print('Returning blank list')
-        return []
-
-    cci_list = glob.glob(CCI_DIR + ending)
-    cci_list.sort()
-    current_cci_index = cci_list.index(cci_name)
-
-    for cci_file in cci_list[:current_cci_index][::-1]:
-        cci_hv = fits.getval(cci_file,'DETHV')
-        cci_expstart = fits.getval(cci_file,'EXPSTART')
-
-        if (cci_expstart < (expstart - NUM_DAYS_PREVIOUS) ):
-            break
-
-        if (cci_hv == dethv):
-            out_list.append(CCI(cci_file, xbinning=X_BINNING, ybinning=Y_BINNING))
-
-        if len(out_list) >= 2*NUM_DAYS_PREVIOUS:
-            print('Breaking off list.  %d files retrieved'%(2 * NUM_DAYS_PREVIOUS))
-            break
-
-    print('Found: %d files' % (len(out_list)))
-    print([item.cci_name for item in out_list])
-    print('-----------------------------------')
-
-    return out_list
-
-#-------------------------------------------------------------------------------
-
-def explode(filename):
-    """Expand an events list into a 3D data cube of PHA images
-
-    This function bins event lists into the 3D datacube with a format
-    like the CSUMs.  1 image containing the events with each integer PHA value
-    will be stacked into the output datacube.
-
-    Parameters
-    ----------
-    filename : str
-        name of the COS corrtag file
-
-    Returns
-    -------
-    out_cube : np.ndarray
-        3D array of images for each PHA
-
-    """
-
-    if isinstance(filename, str):
-        events = fits.getdata(filename, ext=('events', 1))
-    else:
-        raise ValueError('{} needs to be a filename of a COS corrtag file'.format(filename))
-
-    out_cube = np.empty((32, 1024, 16384))
-
-    for phaval in range(0, 32):
-        index = np.where(events['PHA'] == phaval)[0]
-
-        if not len(index):
-            out_cube[phaval] = 0
-            continue
-
-        image, y_range, x_range = np.histogram2d(events['YCORR'][index],
-                                                 events['XCORR'][index],
-                                                 bins=(1024, 16384),
-                                                 range=((0,1023), (0,16384))
-                                                 )
-        out_cube[phaval] = image
-
-    return out_cube
 
 #-------------------------------------------------------------------------------

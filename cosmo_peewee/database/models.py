@@ -378,3 +378,21 @@ class Gain(BaseModel):
                                on_delete='CASCADE')
     class Meta:
         db_table = 'gain'
+
+#-------------------------------------------------------------------------------
+
+class Flagged_Pixels(BaseModel):
+    """Record all pixels below gain 3"""
+    x = IntegerField()
+    y = IntegerField()
+    segment = CharField()
+    hv_lvl = IntegerField()
+    mjd_below_3 = FloatField()
+
+    filename = ForeignKeyField(Gain,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+    class Meta:
+        db_table = 'bad_pixels'

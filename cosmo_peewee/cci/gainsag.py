@@ -1,0 +1,306 @@
+
+"""Routine to monitor the modal gain in each pixel as a
+function of time.  Uses COS Cumulative Image (CCI) files
+to produce a modal gain map for each time period.  Modal gain
+maps for each period are collated to monitor the progress of
+each pixel(superpixel) with time.  Pixels that drop below
+a threshold value are flagged and collected into a
+gain sag table reference file (gsagtab).
+
+The PHA modal gain threshold is set by global variable MODAL_GAIN_LIMIT.
+Allowing the modal gain of a distribution to come within 1 gain bin
+of the threshold results in ~8% loss of flux.  Within
+2 gain bins, ~4%
+3 gain bins, ~2%
+4 gain bins, ~1%
+
+However, due to the column summing, a 4% loss in a region does not appear to be so in the extracted spectrum.
+"""
+
+__author__ = 'Justin Ely, Mees Fix'
+__maintainer__ = 'Mees Fix'
+__email__ = 'mfix@stsci.edu'
+__status__ = 'Active'
+
+import os
+import shutil
+import time
+from datetime import datetime
+import glob
+import sys
+from sqlalchemy.engine import create_engine
+import logging
+logger = logging.getLogger(__name__)
+
+from astropy.io import fits
+import numpy as np
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+from sqlalchemy.sql.functions import concat
+
+from ..utils import send_email
+from .constants import *  
+
+from ..database.models import get_database, get_settings, Files
+from ..database.models import Flagged_Pixels, Gain
+from .gainmap import make_all_gainmaps
+from .gainmap_sagged_pixel_overplotter import make_overplot
+
+import collections
+#------------------------------------------------------------
+
+def main(out_dir):
+    """ 
+    Main driver for monitoring program.
+
+    Parameters
+    ----------
+    out_dir: str
+        Strings where you would like to write files to
+    
+    Returns
+    -------
+    None
+    """
+    
+    settings = get_settings()
+
+    logger.info("STARTING MONITOR")
+
+    logger.info("MAKING NEW GSAGTAB")
+    new_gsagtab = make_gsagtab_db(out_dir, blue=False)
+
+    logger.info("MAKING COMBINED GAINMAPS")
+    make_all_gainmaps(os.path.join(settings['monitor_location'],'CCI'), start_mjd=55055, end_mjd=70000)
+    make_all_gainmaps(os.path.join(settings['monitor_location'],'CCI'), start_mjd=55055, end_mjd=70000, total=True)
+    
+    logger.info("MAKING GAINMAP + GSAG OVERPLOT")
+    make_overplot(new_gsagtab)
+    make_overplot(new_gsagtab, blue_modes=True)
+    # blue_gsagtab = make_gsagtab_db(data_dir, blue=True)
+    logger.info("FINISH MONITOR")
+
+#------------------------------------------------------------
+
+def gsagtab_extension(date, lx, dx, ly, dy, dq, dethv, hv_string, segment):
+    """
+    Creates a properly formatted gsagtab table from input columns.
+
+    Parameters
+    ----------
+    date: list
+        List of dates pixels went bad.
+    lx: list
+        List of x pixel positions (xcorr) space.
+    dx: list
+        List of x bin for COS CCI super pixels.
+    ly: list
+        List of y pixel positions (ycorr) space.
+    dy: list
+        List of y bin for COS CCI super pixels.
+    dq: list
+        List of dq values (8192) for each flagged pixel
+    dethv: list
+        List of voltage values for flagged pixels.
+    hv_string: str
+        HVLEVELA or HLEVELB based on FUVA or FUVB for different header exts.
+    segment: str
+        FUVA or FUVB
+    """
+
+    lx = np.array(lx)
+    ly = np.array(ly)
+    dx = np.array(dx)
+    dy = np.array(dy)
+    dq = np.array(dq)
+    date_col = fits.Column('DATE','D','MJD',array=date)
+    lx_col = fits.Column('LX','J','pixel',array=lx)
+    dx_col = fits.Column('DX','J','pixel',array=dx)
+    ly_col = fits.Column('LY','J','pixel',array=ly)
+    dy_col = fits.Column('DY','J','pixel',array=dy)
+    dq_col = fits.Column('DQ','J','',array=dq)
+    tab = fits.TableHDU.from_columns([date_col,lx_col,ly_col,dx_col,dy_col,dq_col])
+
+    tab.header.add_comment(' ',after='TFIELDS')
+    tab.header.add_comment('  *** Column formats ***',after='TFIELDS')
+    tab.header.add_comment(' ',after='TFIELDS')
+    tab.header.set(hv_string, dethv, after='TFIELDS',comment='High voltage level')
+    tab.header.set('SEGMENT', segment, after='TFIELDS')
+    tab.header.add_comment(' ',after='TFIELDS')
+    tab.header.add_comment('  *** End of mandatory fields ***',after='TFIELDS')
+    tab.header.add_comment(' ',after='TFIELDS')
+
+    return tab
+
+#------------------------------------------------------------
+
+def date_string(date_time):
+    """ 
+    Takes a datetime object and returns
+    a pedigree formatted string.
+    
+    Parameters
+    ----------
+    date_time: str
+        Date when monitor is run.
+
+    Returns
+    -------
+    date_string: str
+        A formatted string used in filenames and header keywords.
+    
+    """
+
+    day = str(date_time.day)
+    month = str(date_time.month)
+    year = str(date_time.year)
+
+    if len(day) < 2:
+        day = '0' + day
+
+    if len(month) < 2:
+        month = '0' + month
+
+    date_string = day + '/' + month + '/' + year
+    
+    return date_string
+
+#------------------------------------------------------------
+
+
+def make_gsagtab_db(out_dir, blue=False):
+    """
+    Creates GSAGTAB from Flagged_Pixel DB table.
+
+    Parameters
+    ----------
+    out_dir: str
+        Directory to write figures/files out to.
+
+    Returns
+    -------
+    None
+
+    Products
+    --------
+    new_gsagtab.fits
+    """
+
+    #-- GSAGTAB has timestamp, so cant be overwritten. All are unique.
+    out_fits = os.path.join(out_dir, 'gsag_%s.fits'%(TIMESTAMP))
+
+    #-- Begin header data.
+    hdu_out=fits.HDUList(fits.PrimaryHDU())
+    date_time = str(datetime.now())
+    date_time = date_time.split()[0]+'T'+date_time.split()[1]
+    hdu_out[0].header['DATE'] = (date_time, 'Creation UTC (CCCC-MM-DD) date')
+    hdu_out[0].header['TELESCOP'] = 'HST'
+    hdu_out[0].header['INSTRUME'] = 'COS'
+    hdu_out[0].header['DETECTOR'] = 'FUV'
+    hdu_out[0].header['COSCOORD'] = 'USER'
+    hdu_out[0].header['VCALCOS'] = '2.0'
+    hdu_out[0].header['USEAFTER'] = 'May 11 2009 00:00:00'
+    hdu_out[0].header['CENWAVE'] = 'N/A'
+
+    today_string = date_string(datetime.now())
+    hdu_out[0].header['PEDIGREE'] = 'INFLIGHT 25/05/2009 %s'%(today_string)
+    hdu_out[0].header['FILETYPE'] = 'GAIN SAG REFERENCE TABLE'
+
+    descrip_string = 'Gives locations of gain-sag regions as of %s'%( str(datetime.now().date() ))
+    while len(descrip_string) < 67:
+        descrip_string += '-'
+    hdu_out[0].header['DESCRIP'] = descrip_string
+    hdu_out[0].header['COMMENT'] = ("= 'This file was created by M. Fix'")
+    hdu_out[0].header.add_history('Flagged regions in higher voltages have been backwards populated')
+    hdu_out[0].header.add_history('to all lower HV levels for the same segment.')
+    hdu_out[0].header.add_history('')
+    hdu_out[0].header.add_history('A region will be flagged as bad when the detected')
+    hdu_out[0].header.add_history('flux is found to drop by 5%.  This happens when')
+    hdu_out[0].header.add_history('the measured modal gain of a region falls to ')
+    hdu_out[0].header.add_history('%d given current lower pulse height filtering.'%(MODAL_GAIN_LIMIT) )
+
+    #-- Possible HVs for all of the extensions.
+    possible_hv_strings = ['000', '100'] + list(map(str, list(range(142, 179))))
+
+    #-- Connect to database.
+    settings = get_settings()
+    database = get_database()
+    database.connect()
+
+    #-- Get all segments
+    segment_results = Gain.select(Gain.segment).distinct()
+
+    #-- Put segments in list.
+    segments = [row.segment for row in segment_results]
+
+    #-- For each segment, loop through all the possible HVs and create an extension in the GSAGTAB.
+    for segment in segments:
+        hvlevel_string = 'HVLEVEL' + segment[-1].upper()
+
+        #-- Begin HV loop.
+        for hv_level in possible_hv_strings:
+            #-- Set all of the empty lists that will be the data arrays for GSAGTAB exts.
+            date = []
+            lx = []
+            dx = []
+            ly = []
+            dy = []
+            dq = []
+
+            hv_level = int(hv_level)
+
+            #-- Get all of the sagged pixels for a specific Segment/HV Level combo.
+            flagged_pix = list(Flagged_Pixels.select().distinct().where(
+                                                                        (Flagged_Pixels.segment == segment) &
+                                                                        (Flagged_Pixels.hv_lvl >= hv_level)
+                                                                        ).dicts())
+            
+            
+            result = collections.defaultdict(list)
+            #-- for each x,y coodinate pair, create a dictionary where there key is the x,y pair that
+            #-- contains a list of dictionaries for all of the entries of that x,y pair.
+            for d in flagged_pix:
+                result[d['x'], d['y']].append(d)
+            
+            #-- Find the min date for each coordinate pair.
+            bad_pix = []
+            for coord_pair in result.keys():
+                row_bad = min(result[coord_pair], key=lambda x:x['mjd_below_3'])
+            
+                #-- Apply binning constant and append values to lists
+                lx.append(row_bad['x']*X_BINNING)
+                dx.append(X_BINNING)
+                ly.append(row_bad['y']*Y_BINNING)
+                dy.append(Y_BINNING)
+                date.append(row_bad['mjd_below_3'])
+                dq.append(8192)
+
+            if not len(lx):
+                #-- Extension tables cannot have 0 entries, a
+                #-- region of 0 extent centered on (0,0) is
+                #-- sufficient to prevent CalCOS crash.
+                lx.append(0)
+                ly.append(0)
+                dx.append(0)
+                dy.append(0)
+                date.append(0)
+                dq.append(8192)
+
+            logger.debug('found {} bad regions'.format(len(date)))
+            tab = gsagtab_extension(date, lx, dx, ly, dy, dq, hv_level, hvlevel_string, segment)
+            hdu_out.append(tab)
+    if blue:
+        out_fits = out_fits.replace('.fits', '_blue.fits')
+        hdu_out[0].header['CENWAVE'] = 'BETWEEN 1055 1097'
+
+        descrip_string = 'Blue-mode gain-sag regions as of %s'%(str(datetime.now().date()))
+        while len(descrip_string) < 67:
+            descrip_string += '-'
+        hdu_out[0].header['DESCRIP'] = descrip_string
+
+    database.close()
+    hdu_out.writeto(out_fits, clobber=True)
+    logger.info('WROTE: GSAGTAB to %s'%(out_fits))
+    return out_fits
+
+#------------------------------------------------------------

@@ -41,6 +41,8 @@ from bokeh.io import output_file, show, save, gridplot
 from bokeh.plotting import figure
 from bokeh.models import Range1d, HoverTool, BoxSelectTool, ColumnDataSource, OpenURL, TapTool, Div, Button, CustomJS
 from bokeh.layouts import column, row
+
+from copy import deepcopy
 #-------------------------------------------------------------------------------
 
 def find_center(data):
@@ -112,7 +114,8 @@ def find_stims(image, segment, stim, brf_file):
 def locate_stims(data_object, start=0, increment=None, brf_file=None):
 
     full_path = os.path.join(data_object.path, data_object.filename)
-    #-- change this to pull brf file from the header if not specified
+
+    #-- change this to pull brf file from the header if not specified    
     if not brf_file:
         brf_file = os.path.join(os.environ['lref'], 's7g1700el_brf.fits')
 
@@ -140,7 +143,7 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
             yield stim_info
             raise StopIteration
 
-        # If increment is not supplied, use the rates supplied by the detector
+        #-- If increment is not supplied, use the rates supplied by the detector
         if not increment:
             if exptime < 10:
                 increment = .03
@@ -153,7 +156,7 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
 
         stop = start + increment
 
-        # Iterate from start to stop, excluding final bin if smaller than increment
+        #-- Iterate from start to stop, excluding final bin if smaller than increment
         start_times = np.arange(start, exptime-increment, increment)
         if not len(start_times):
             yield stim_info
@@ -167,7 +170,7 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
 
             events = events[data_index]
 
-            # Call for this is x_values, y_values, image to bin to, offset in x
+            #-- Call for this is x_values, y_values, image to bin to, offset in x
             # ccos.binevents(x, y, array, x_offset, dq, sdqflags, epsilon)
             im = np.zeros((1024, 16384)).astype(np.float32)
             ccos.binevents(events['RAWX'].astype(np.float32),
@@ -190,10 +193,10 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
             stim_info['stim2_y'] = round(found_lr_y, 3)
             stim_info['counts'] = round(im.sum(), 7)
 
-            yield stim_info
+            yield deepcopy(stim_info)
         
         #-- delete hdu at the end
-        #-- collect the crap
+        #-- collect the garbage.
         del hdu
         gc.collect()
 #-----------------------------------------------------
@@ -331,15 +334,15 @@ def make_panel(segment, stim, time=False):
     database.connect()
 
     #-- Set height and width.
-    plt_wth = 650
-    plt_hgt = 350
+    plt_wth = 500
+    plt_hgt = 500
 
     if segment == 'FUVA':
         color = 'blue'
     else:
         color = 'red'
 
-    TOOLS ='box_zoom,box_select,crosshair,pan,reset,tap'
+    TOOLS ='box_zoom,box_select,crosshair,pan,reset,tap,save'
 
     #data = Stims.select().where(Stims.segment==segment)
     data = []
@@ -419,7 +422,7 @@ def make_panel(segment, stim, time=False):
     return p
 #-------------------------------------------------------------------------------
 
-def interactive_plotting():
+def interactive_plotting(path, filename):
     """Make interactive Bokeh Figures
 
     Parameters
@@ -431,9 +434,9 @@ def interactive_plotting():
     None
     """
 
-    
-    remove_if_there('/user/mfix/stims.html')
-    output_file('/user/mfix/stims.html') 
+    outname = os.path.join(path, filename)
+    remove_if_there(outname)
+    output_file(outname) 
     
     #-- FUVA Panels x vs. y
     FUVA_upper = make_panel('FUVA', 'upper')
@@ -443,7 +446,7 @@ def interactive_plotting():
     
     p = gridplot([[FUVA_upper, FUVA_lower], [FUVB_upper, FUVB_lower]])
 
-    save(p, filename='/user/mfix/stims.html')
+    save(p, filename=outname)
 #-------------------------------------------------------------------------------
 
 def make_plots(out_dir, connection_string):
@@ -477,11 +480,21 @@ def make_plots(out_dir, connection_string):
     
     data = [line for line in data]
     plt.subplot(2, 2, 1)
+
+    #-- FUVA plots
+    x_range_min, x_range_max = 250, 530
+    y_range_min, y_range_max = 940, 1030
+
     x = [line.stim1_x for line in data]
     y = [line.stim1_y for line in data]
     plt.plot(x, y, 'b.', alpha=.7)
+    
+    plt.xlim([x_range_min, x_range_max])
+    plt.ylim([y_range_min, y_range_max])
+
     plt.xlabel('x')
     plt.ylabel('y')
+    
     plt.title('Segment A: Stim A (Upper Left)')
     xcenter = brf[0]['SX1']
     ycenter = brf[0]['SY1']
@@ -514,12 +527,21 @@ def make_plots(out_dir, connection_string):
     #                                     stims.stim2_x != -999 AND
     #                                     stims.stim2_y != -999;""")
 
+    #-- FUVA Lower
     data = Stims.select().where(Stims.segment=='FUVA')
     data = [line for line in data]
+   
+    x_range_min, x_range_max = 15860, 16140
+    y_range_min, y_range_max = -15, 80
+   
     plt.subplot(2, 2, 2)
     x = [line.stim2_x for line in data]
     y = [line.stim2_y for line in data]
     plt.plot(x, y, 'r.', alpha=.7)
+
+    plt.xlim([x_range_min, x_range_max])
+    plt.ylim([x_range_min, x_range_max])
+
     plt.xlabel('x')
     plt.ylabel('y')
     plt.title('Segment A: Stim B (Lower Right)')
@@ -552,12 +574,21 @@ def make_plots(out_dir, connection_string):
     #                                     stims.stim2_x != -999 AND
     #                                     stims.stim2_y != -999;""")
 
+    #-- FUVB Upper
     data = Stims.select().where(Stims.segment=='FUVB')
     data = [line for line in data]
+
+    x_range_min, x_range_max = 320, 460
+    y_range_min, y_range_max = 875, 1100
+    
     plt.subplot(2, 2, 3)
     x = [line.stim1_x for line in data]
     y = [line.stim1_y for line in data]
     plt.plot(x, y, 'b.', alpha=.7)
+    
+    plt.xlim([x_range_min, x_range_max])
+    plt.ylim([y_range_min, y_range_max])
+    
     plt.xlabel('x')
     plt.ylabel('y')
     plt.title('Segment B: Stim A (Upper Left)')
@@ -590,13 +621,22 @@ def make_plots(out_dir, connection_string):
     #                                     stims.stim2_x != -999 AND
     #                                     stims.stim2_y != -999;""")
     
+    #-- FUVB Lower
     data = Stims.select().where(Stims.segment=='FUVB')
     data = [line for line in data]
 
     plt.subplot(2, 2, 4)
+    
+    x_range_min, x_range_max = 15920, 16080
+    y_range_min, y_range_max = -75, 150
+    
     x = [line.stim2_x for line in data]
     y = [line.stim2_y for line in data]
     plt.plot(x, y, 'r.', alpha=.7)
+
+    plt.xlim([x_range_min, x_range_max])
+    plt.ylim([y_range_min, y_range_max])
+
     plt.xlabel('x')
     plt.ylabel('y')
     plt.title('Segment B: Stim B (Lower Right)')
@@ -626,43 +666,43 @@ def make_plots(out_dir, connection_string):
     os.chmod(os.path.join(out_dir, 'STIM_locations_peewee.png'),0o766)
 
 
-    for segment in ['FUVA', 'FUVB']:
-        fig = plt.figure(2, figsize=(18, 12))
-        fig.suptitle('%s coordinate locations with time' % (segment))
+    # for segment in ['FUVA', 'FUVB']:
+    #     fig = plt.figure(2, figsize=(18, 12))
+    #     fig.suptitle('%s coordinate locations with time' % (segment))
 
-        col_names = ['stim1_x', 'stim1_y', 'stim2_x', 'stim2_y']
-        titles = ['Upper Left, X', 'Upper Left, Y', 'Lower Right, X', 'Lower Right, Y']
+    #     col_names = ['stim1_x', 'stim1_y', 'stim2_x', 'stim2_y']
+    #     titles = ['Upper Left, X', 'Upper Left, Y', 'Lower Right, X', 'Lower Right, Y']
 
-        for i, (column, title) in enumerate(zip(col_names, titles)):
-            ax = fig.add_subplot(2, 2, i + 1)
-            ax.set_title(title)
-            ax.set_xlabel('MJD')
-            ax.set_ylabel('Coordinate')
+    #     for i, (column, title) in enumerate(zip(col_names, titles)):
+    #         ax = fig.add_subplot(2, 2, i + 1)
+    #         ax.set_title(title)
+    #         ax.set_xlabel('MJD')
+    #         ax.set_ylabel('Coordinate')
 
-            #-- Data for stim vs time.
-            # query = """SELECT stims.abs_time, stims.{}
-            #                   FROM stims
-            #                   JOIN headers ON stims.rootname = headers.rootname
-            #                   WHERE headers.segment = '{}' AND
-            #                       stims.stim1_x != -999 AND
-            #                       stims.stim1_y != -999 AND
-            #                       stims.stim2_x != -999 AND
-            #                       stims.stim2_y != -999;""".format(column, segment)
+    #         #-- Data for stim vs time.
+    #         # query = """SELECT stims.abs_time, stims.{}
+    #         #                   FROM stims
+    #         #                   JOIN headers ON stims.rootname = headers.rootname
+    #         #                   WHERE headers.segment = '{}' AND
+    #         #                       stims.stim1_x != -999 AND
+    #         #                       stims.stim1_y != -999 AND
+    #         #                       stims.stim2_x != -999 AND
+    #         #                       stims.stim2_y != -999;""".format(column, segment)
 
-            query = Stims.raw('SELECT abs_time, %s FROM stims WHERE segment = %s', (column,segment))
+    #         query = Stims.raw('SELECT abs_time, %s FROM stims WHERE segment = %s', (column,segment))
             
-            data = [line for line in database.execute_sql(query)]
-            times = [line[0] for line in data]
-            coords = [line[1] for line in data]
-            ax.plot(times, coords, 'o')
+    #         data = [line for line in database.execute_sql(query)]
+    #         times = [line[0] for line in data]
+    #         coords = [line[1] for line in data]
+    #         ax.plot(times, coords, 'o')
 
-        remove_if_there(os.path.join(out_dir, 'STIM_locations_vs_time_%s_peewee.png' %
-                                                                    (segment)))
-        fig.savefig(os.path.join(out_dir, 'STIM_locations_vs_time_%s_peewee.png' %
-                                                                    (segment)))
-        plt.close(fig)
-        os.chmod(os.path.join(out_dir, 'STIM_locations_vs_time_%s_peewee.png' %
-                                                                    (segment)),0o766)
+    #     remove_if_there(os.path.join(out_dir, 'STIM_locations_vs_time_%s_peewee.png' %
+    #                                                                 (segment)))
+    #     fig.savefig(os.path.join(out_dir, 'STIM_locations_vs_time_%s_peewee.png' %
+    #                                                                 (segment)))
+    #     plt.close(fig)
+    #     os.chmod(os.path.join(out_dir, 'STIM_locations_vs_time_%s_peewee.png' %
+    #                                                                 (segment)),0o766)
 
     database.close()
     # ------------------------#
@@ -960,7 +1000,7 @@ def stim_monitor():
 
     """
 
-    logger.info("Starting Monitor")
+    logger.info("STARTING MONITOR")
 
     settings = get_settings()
 
@@ -976,7 +1016,9 @@ def stim_monitor():
     # send_email(missing_obs, missing_dates)
 
     # check_individual(monitor_dir, settings['connection_string'])
-    make_plots(monitor_dir, settings['connection_string'])
-    interactive_plotting()
-    move_to_web(monitor_dir, webpage_dir)
-    logger.info("Finished Monitor")
+    # make_plots(monitor_dir, settings['connection_string'])
+    
+    logger.info("MAKING INTERACTIVE PLOTS")
+    interactive_plotting(os.environ['HOME'], 'stim_peewee.html')
+    # move_to_web(monitor_dir, webpage_dir)
+    logger.info("FINISH MONITOR")
