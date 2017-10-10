@@ -1,4 +1,6 @@
 
+from __future__ import absolute_import
+
 """Routine to monitor the modal gain in each pixel as a
 function of time.  Uses COS Cumulative Image (CCI) files
 to produce a modal gain map for each time period.  Modal gain
@@ -33,6 +35,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 from astropy.io import fits
+from astropy.time import Time
+
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -44,14 +48,13 @@ from .constants import *
 from ..database.models import get_database, get_settings, Files
 from ..database.models import Flagged_Pixels, Gain
 from .gainmap import make_all_gainmaps
-from .gainmap_sagged_pixel_overplotter import make_overplot
+from .gainmap_sagged_pixel_overplotter import make_overplot, hotspot_plotter_interactive
 
 import collections
 #------------------------------------------------------------
 
 def main(out_dir):
-    """ 
-    Main driver for monitoring program.
+    """Main driver for monitoring program.
 
     Parameters
     ----------
@@ -66,25 +69,28 @@ def main(out_dir):
     settings = get_settings()
 
     logger.info("STARTING MONITOR")
-
+    
+    logger.info("MAKING HOTSPOT PLOTS")
+    hotspot_plotter_interactive('FUVA')
+    hotspot_plotter_interactive('FUVB')
+    
     logger.info("MAKING NEW GSAGTAB")
-    new_gsagtab = make_gsagtab_db(out_dir, blue=False)
-
+    new_gsagtab = make_gsagtab_db(out_dir, filter=True)
+    # new_gsagtab = make_gsagtab_db(out_dir)
     logger.info("MAKING COMBINED GAINMAPS")
     make_all_gainmaps(os.path.join(settings['monitor_location'],'CCI'), start_mjd=55055, end_mjd=70000)
     make_all_gainmaps(os.path.join(settings['monitor_location'],'CCI'), start_mjd=55055, end_mjd=70000, total=True)
     
     logger.info("MAKING GAINMAP + GSAG OVERPLOT")
     make_overplot(new_gsagtab)
-    make_overplot(new_gsagtab, blue_modes=True)
+    # make_overplot(new_gsagtab, bm_hvlvl_a=173, bm_hvlvl_b=175, blue_modes=True)
     # blue_gsagtab = make_gsagtab_db(data_dir, blue=True)
     logger.info("FINISH MONITOR")
 
 #------------------------------------------------------------
 
 def gsagtab_extension(date, lx, dx, ly, dy, dq, dethv, hv_string, segment):
-    """
-    Creates a properly formatted gsagtab table from input columns.
+    """Creates a properly formatted gsagtab table from input columns.
 
     Parameters
     ----------
@@ -108,19 +114,25 @@ def gsagtab_extension(date, lx, dx, ly, dy, dq, dethv, hv_string, segment):
         FUVA or FUVB
     """
 
+    #-- Set arrays
     lx = np.array(lx)
     ly = np.array(ly)
     dx = np.array(dx)
     dy = np.array(dy)
     dq = np.array(dq)
+
+    #-- Create data columns for fits file.
     date_col = fits.Column('DATE','D','MJD',array=date)
     lx_col = fits.Column('LX','J','pixel',array=lx)
     dx_col = fits.Column('DX','J','pixel',array=dx)
     ly_col = fits.Column('LY','J','pixel',array=ly)
     dy_col = fits.Column('DY','J','pixel',array=dy)
     dq_col = fits.Column('DQ','J','',array=dq)
+    
+    #-- Create data table
     tab = fits.TableHDU.from_columns([date_col,lx_col,ly_col,dx_col,dy_col,dq_col])
 
+    #-- Add comments.
     tab.header.add_comment(' ',after='TFIELDS')
     tab.header.add_comment('  *** Column formats ***',after='TFIELDS')
     tab.header.add_comment(' ',after='TFIELDS')
@@ -135,8 +147,7 @@ def gsagtab_extension(date, lx, dx, ly, dy, dq, dethv, hv_string, segment):
 #------------------------------------------------------------
 
 def date_string(date_time):
-    """ 
-    Takes a datetime object and returns
+    """Takes a datetime object and returns
     a pedigree formatted string.
     
     Parameters
@@ -167,16 +178,18 @@ def date_string(date_time):
 
 #------------------------------------------------------------
 
-
-def make_gsagtab_db(out_dir, blue=False):
-    """
-    Creates GSAGTAB from Flagged_Pixel DB table.
+def make_gsagtab_db(out_dir, blue=False, filter=False):
+    """Creates GSAGTAB from Flagged_Pixel DB table.
 
     Parameters
     ----------
     out_dir: str
-        Directory to write figures/files out to.
-
+        Directory to write figures/files out to
+    blue: bool
+        If true make bluemode maps
+    filter: bool
+        If filter, check pixels for temporary sagging
+   
     Returns
     -------
     None
@@ -186,8 +199,15 @@ def make_gsagtab_db(out_dir, blue=False):
     new_gsagtab.fits
     """
 
-    #-- GSAGTAB has timestamp, so cant be overwritten. All are unique.
-    out_fits = os.path.join(out_dir, 'gsag_%s.fits'%(TIMESTAMP))
+    if filter:
+        logger.info('CHECKING LP PIXEL RECOVERY')
+        check_pixel_recovery('FUVA')
+        check_pixel_recovery('FUVB')
+        filename = 'gsag_filter_%s.fits'%(TIMESTAMP)
+    else:
+        filename = 'gsag_%s.fits'%(TIMESTAMP)
+    
+    out_fits = os.path.join(out_dir, filename)
 
     #-- Begin header data.
     hdu_out=fits.HDUList(fits.PrimaryHDU())
@@ -252,7 +272,8 @@ def make_gsagtab_db(out_dir, blue=False):
             #-- Get all of the sagged pixels for a specific Segment/HV Level combo.
             flagged_pix = list(Flagged_Pixels.select().distinct().where(
                                                                         (Flagged_Pixels.segment == segment) &
-                                                                        (Flagged_Pixels.hv_lvl >= hv_level)
+                                                                        (Flagged_Pixels.hv_lvl >= hv_level) &
+                                                                        (Flagged_Pixels.recovery == False)
                                                                         ).dicts())
             
             
@@ -304,3 +325,80 @@ def make_gsagtab_db(out_dir, blue=False):
     return out_fits
 
 #------------------------------------------------------------
+
+def check_pixel_recovery(segment):
+    """Check pixels for actual sagging. Sometimes
+    a pixel can drop below gain 3 but can recover.
+
+    Parameters
+    ----------
+    segment: str
+        FUVA or FUVB
+    
+    Returns
+    -------
+    None
+    """
+
+    #-- Connect to database
+    settings = get_settings()
+    database = get_database()
+    database.connect()
+    
+    #-- Profile widths for LP4. (Super Pixel binned by two.)
+    lp4_profile ={'FUVA':[400//Y_BINNING, 435//Y_BINNING],
+                  'FUVB':[460//Y_BINNING, 495//Y_BINNING]}
+
+
+    #-- Get all of the flagged pixels at LP4
+    flagged_pixels = Flagged_Pixels.select().distinct().where(
+                                                             (Flagged_Pixels.y.between(lp4_profile[segment][0],lp4_profile[segment][1])) &
+                                                             (Flagged_Pixels.x.between(1000//X_BINNING,15000//X_BINNING)) &
+                                                             (Flagged_Pixels.segment == segment) &
+                                                             (Flagged_Pixels.recovery == False)
+                                                             )
+    
+    #-- Get all measurements for all of the x,y pixels returned.    
+    gain_measurements = list(Gain.select().distinct().where(
+                                                           (Gain.x.in_([row.x for row in flagged_pixels])) &
+                                                           (Gain.y.in_([row.y for row in flagged_pixels])) &
+                                                           (Gain.segment == segment)
+                                                           ).dicts())
+    
+    logger.info('FOUND {} SAGGED PIXELS FOR SEGMENT {}!'.format(len(gain_measurements),segment))
+    
+    result = collections.defaultdict(list)
+    
+    #-- Organize all of the pixels by segment.
+    for d in gain_measurements:
+        result[d['segment'], d['x'], d['y']].append(d)
+
+
+    #-- For every segment,x,y combo check the latest measurements
+    for combo in result.keys():
+        segment,x,y = combo
+        
+        #-- Get the latest measurement for this pixel.
+        latest_measurement = max(result[combo], key=lambda x:x['expstart'])
+        
+        #-- If the latest gain measurement is above 3, the pixel recovered!
+        if latest_measurement['gain'] > 3:
+            Flagged_Pixels.update(recovery=True).where(
+                                                      (Flagged_Pixels.x == latest_measurement['x']) &
+                                                      (Flagged_Pixels.y == latest_measurement['y']) &
+                                                      (Flagged_Pixels.segment == latest_measurement['segment'])
+                                                      ).execute()
+            
+            logger.info('UPDATING ROW FOR x={}, y={}! gain={} AS OF {}'.format(latest_measurement['x']*X_BINNING,
+                                                                               latest_measurement['y']*Y_BINNING,
+                                                                               latest_measurement['gain'],
+                                                                               Time(latest_measurement['expstart'],format='mjd').iso)) 
+        #-- Else, the pixel never recovered keep the entry.
+        else:
+            logger.warning('PIXEL x={}, y={} IS SAGGED! gain={} AS OF {}.'.format(latest_measurement['x']*X_BINNING,
+                                                                                  latest_measurement['y']*Y_BINNING,
+                                                                                  latest_measurement['gain'],
+                                                                                  Time(latest_measurement['expstart'],format='mjd').iso))
+            continue
+
+    database.close()

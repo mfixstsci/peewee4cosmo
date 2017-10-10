@@ -1,5 +1,10 @@
 from __future__ import print_function, absolute_import, division
 
+__author__ = 'Mees Fix'
+__maintainer__ = 'Mees Fix'
+__email__ = 'mfix@stsci.edu'
+__status__ = 'Active'
+
 import os
 import sys
 import types
@@ -16,6 +21,7 @@ from peewee import *
 import functools
 
 import itertools
+import collections
 
 import multiprocessing as mp
 import numpy as np
@@ -39,11 +45,15 @@ from ..stims.monitor import stim_monitor
 
 from ..cci.gainmap import write_and_pull_gainmap
 from ..cci.gainsag import main as cci_main
+
+from ..cci.find_bad_pix import populate_bad_pix
+from ..cci.constants import *
+
 #-------------------------------------------------------------------------------
 
 def bulk_insert(table, data_source, debug=False):
     
-    """ Ingest data into database
+    """Ingest data into database
 
     Parameters
     ----------
@@ -92,6 +102,7 @@ def bulk_insert(table, data_source, debug=False):
         except InternalError as e:
             print('InternalError', e)
             database.close()
+
 #-------------------------------------------------------------------------------
 
 def pull_data(file_result, function):
@@ -128,8 +139,7 @@ def pull_data(file_result, function):
 
 def bulk_delete(all_files):
     
-    """
-    This function is a temporary fix for /smov/cos/Data/. Since the 'date-string'
+    """This function is a temporary fix for /smov/cos/Data/. Since the 'date-string'
     in the file path changes, the database will try to ingest the same files. The
     paths changes due to newly downlinked data or when data is reprocessed using
     new reference files.
@@ -175,8 +185,7 @@ def bulk_delete(all_files):
 
 def setup_logging():
     
-    """
-    Set up logging....
+    """Set up logging....
 
     Parameters
     ----------
@@ -204,8 +213,7 @@ def setup_logging():
 
 def populate_files(settings):
     
-    """
-    Populate paths and files from filesystem.
+    """Populate paths and files from filesystem.
     
     Parameters
     ----------
@@ -331,9 +339,10 @@ def populate_tables(table, table_keys, search_str, num_cpu=2):
         bulk_insert(table, itertools.chain(*data_to_insert))
 
 #-------------------------------------------------------------------------------
+
 def populate_osm(num_cpu=2):
     
-    """ Populate the OSM table
+    """Populate the OSM table
     
     Parameters
     ----------
@@ -369,9 +378,10 @@ def populate_osm(num_cpu=2):
         bulk_insert(Lampflash, itertools.chain(*data_to_insert))
 
 #-------------------------------------------------------------------------------
+
 def populate_acqs(num_cpu=2):
     
-    """ Populate the rawacqs table
+    """Populate the rawacqs table
     
     Parameters
     ----------
@@ -411,7 +421,7 @@ def populate_acqs(num_cpu=2):
 
 def populate_darks(num_cpu=2):
     
-    """ Populate the dark table
+    """Populate the dark table
     
     Parameters
     ----------
@@ -452,7 +462,7 @@ def populate_darks(num_cpu=2):
 
 def populate_stims(num_cpu=2):
     
-    """ Populate the stim pulse table
+    """Populate the stim pulse table
     
     None of the monitoring code has been integrated into the system yet.
     Still working with the monitoring team to refactor monitor....
@@ -493,12 +503,12 @@ def populate_stims(num_cpu=2):
         if len(data_to_insert):
             #-- Pass to bulk insert.
             bulk_insert(Stims, itertools.chain(*data_to_insert))
+
 #-------------------------------------------------------------------------------
 
 def populate_gain(num_cpu=2):
     
-    """ 
-    Populate gain table and create gainmaps
+    """Populate gain table and create gainmaps
     
     Parameters
     ----------
@@ -516,8 +526,8 @@ def populate_gain(num_cpu=2):
 
     files_to_add = (Files.select()
                             .where(
-                               (Files.filename.contains('l\_%\_00\____\_cci.fits%') |
-                                Files.filename.contains('l\_%\_01\____\_cci.fits%')) &
+                               (Files.filename.contains('l\_%\_00\____\_cci.fits.gz') |
+                                Files.filename.contains('l\_%\_01\____\_cci.fits.gz')) &
                                 Files.filename.not_in(Gain.select(Gain.filename)) & 
                                 Files.monitor_flag == True
                             ))
@@ -534,13 +544,82 @@ def populate_gain(num_cpu=2):
     pool = mp.Pool(processes=num_cpu)
 
     #-- Add 10 files at a time.
-    step=1
+    step=10
     for idx in range(0, len(list(files_to_add)), step):
     	data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
     	
     	if len(data_to_insert):
 	   		bulk_insert(Gain, itertools.chain(*data_to_insert))
     
+#-------------------------------------------------------------------------------
+
+def find_flagged():
+    
+    """Search the Gain table in cosmo for sagged pixels. Once located, there can be
+    multiple entries because the gain for a pixel can drop below 3. We want the 
+    date that it went bad first, this will become an entry in the Flagged_Pixel table.
+    
+    Parameters
+    ----------
+    args: Dict
+        Dictionary containing HV_LVL and segment combination.
+
+    Returns
+    -------
+    None
+    """
+    
+    settings = get_settings()
+    database = get_database()
+    database.connect()
+
+    #-- Nothing bad before 2010,
+    #-- and there are some weird gainmaps back there
+    #-- filtering out for now (expstart > 55197).
+    
+    #-- Gain.y < 300 and Gain.y > 200 are counts in the spectral region.
+    #-- Don't care about anything outside of that. 
+    all_coords = Gain.select().distinct().where(
+                                                (Gain.gain <= 3) &
+                                                (Gain.counts >= 30) &
+                                                (Gain.expstart > 55197) &
+                                                (Gain.y.between(400//Y_BINNING, 600//Y_BINNING)) &
+                                                (Gain.segment.in_(Gain.select(Gain.segment).distinct())) &
+                                                (Gain.hv_lvl.in_(Gain.select(Gain.hv_lvl).distinct())) &
+                                                (Gain.filename.not_in(Flagged_Pixels.select(Flagged_Pixels.filename)))
+                                                ).dicts()
+    database.close()
+
+    if len(all_coords):
+        logger.info('{} NEW FLAGGED ENTRIES!'.format(len(all_coords)))
+        #-- Set up collection dictionary.
+        result = collections.defaultdict(list)
+        
+        #-- for each x,y coodinate pair, create a dictionary where there key is the x,y pair that
+        #-- contains a list of dictionaries for all of the entries of that x,y pair.
+        for d in all_coords:
+            result[d['x'], d['y'], d['hv_lvl']].append(d)
+        
+        #-- For each key in the dictionary, find the dictionary that has the date entry where the pixel
+        #-- first went bad.
+        bad_pix = []
+        for coord_pair in result.keys():
+            row_bad = min(result[coord_pair], key=lambda x:x['expstart'])
+            
+            #-- Take meta and make dict according to fields in Flagged_Pixels and append to list.
+            bad_dict = {'segment': row_bad['segment'],
+                        'hv_lvl': row_bad['hv_lvl'],
+                        'x': row_bad['x'],
+                        'y': row_bad['y'],
+                        'filename': row_bad['filename'],
+                        'mjd_below_3': row_bad['expstart'],
+                        'recovery': False}
+            
+            bad_pix.append(bad_dict)
+        bulk_insert(Flagged_Pixels, bad_pix)
+    else:
+        logger.info('NO NEW FLAGGED ENTRIES!')
+
 #-------------------------------------------------------------------------------
 
 def ingest_all():
@@ -613,6 +692,7 @@ def ingest_all():
 
     #-- FUV rawtag headers    
     logger.info("POPULATING FUV RAWTAG HEADERS")
+
     populate_tables(FUVA_raw_headers, fuva_raw_keys, '%rawtag_a.fits.gz%', settings['num_cpu'])
     populate_tables(FUVB_raw_headers, fuvb_raw_keys, '%rawtag_b.fits.gz%', settings['num_cpu'])
 
@@ -640,10 +720,14 @@ def ingest_all():
     #-- Populate gain monitor
     logger.info("POPULATING GAIN TABLE")
     populate_gain(settings['num_cpu'])
+    
+    #-- Populate flagged pixels table.
+    logger.info("POPULATING FLAGGED PIXEL TABLE")
+    find_flagged()
 #-------------------------------------------------------------------------------
 
 def run_monitors():
-    """ Run all COS Monitors
+    """Run all COS Monitors
     
     Parameters
     ----------
@@ -654,11 +738,12 @@ def run_monitors():
     None
     
     """
+    settings = get_settings()
     setup_logging()
     
     osm_monitor()
     dark_monitor()
     stim_monitor()
-    cci_main(os.environ['HOME'])
+    cci_main(os.path.join(settings['monitor_location'], 'CCI'))
 
 #-------------------------------------------------------------------------------

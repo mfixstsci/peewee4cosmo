@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 
 """ Script to compile the spectrum shift data for COS FUV and NUV data.
-
 """
 
 import glob
@@ -12,6 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import numpy as np
+np.seterr(divide='ignore')
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
@@ -972,7 +972,7 @@ def monitor():
 
     for place in [webpage_dir, monitor_dir]:
         if not os.path.exists(place):
-            logger.debug("creating monitor location: {}".format(place))
+            logger.debug("CREATING MONITOR LOCATION: {}".format(place))
             os.makedirs(place)
 
     #-- Create tables
@@ -982,11 +982,10 @@ def monitor():
     #-- Make static plots.
     make_plots(flash_data, rawacq_data, monitor_dir)
     
-    # make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'FUV')
-    # make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'NUV')
+    make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'FUV')
+    make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'NUV')
 
     # make_plots_2(flash_data, rawacq_data, monitor_dir)
-    
     # fp_diff(flash_data)
 
     for item in glob.glob(os.path.join(monitor_dir, '*.p??')):

@@ -358,8 +358,124 @@ class CCI:
 
 #-------------------------------------------------------------------------------
 
-def make_total_gainmap(hv_lvl, gainmap_dir=None, segment='FUV', start_mjd=55055, end_mjd=70000, reverse=False):
+def measure_gainimage(data_cube, mincounts=30, phlow=1, phhigh=31):
+    """Measure the modal gain at each pixel
+    returns a 2d gainmap.
+    """
 
+    # Suppress certain pharanges
+    for i in list(range(0, phlow+1)) + list(range(phhigh, len(data_cube))):
+        data_cube[i] = 0
+
+    counts_im = np.sum(data_cube, axis=0)
+
+    out_gain = np.zeros(counts_im.shape)
+    out_counts = np.zeros(counts_im.shape)
+    out_std = np.zeros(counts_im.shape)
+
+    index_search = np.where(counts_im >= mincounts)
+    if not len(index_search):
+        return out_gain, out_counts, out_std
+
+    for y, x in zip(*index_search):
+        dist = data_cube[:, y, x]
+
+        g, fit_g, success = fit_distribution(dist)
+
+        if not success:
+            continue
+
+        #-- double-check
+        if g.mean.value <= 3:
+            sub_dist = dist - g(np.arange(len(dist)))
+            sub_dist[sub_dist < 0] = 0
+
+            g2, fit2_g, success = fit_distribution(sub_dist, start_mean=15)
+
+            if success and abs(g2.mean.value - g.mean.value) > 1:
+                continue
+
+        out_gain[y, x] = g.mean.value
+        out_counts[y, x] = dist.sum()
+        out_std[y, x] = g.stddev.value
+
+
+    return out_gain, out_counts, out_std
+
+#-------------------------------------------------------------------------------
+
+def fit_distribution(dist, start_mean=None, start_amp=None, start_std=None):
+
+    x_vals = np.arange(len(dist))
+
+    start_mean = start_mean or dist.argmax()
+    start_amp = start_amp or int(max(dist))
+    start_std = start_std or 1.05
+
+    g_init = models.Gaussian1D(amplitude=start_amp,
+                               mean=start_mean,
+                               stddev=start_std,
+                               bounds={'mean': [1, 30]})
+    g_init.stddev.fixed = True
+
+    fit_g = fitting.LevMarLSQFitter()
+    g = fit_g(g_init, x_vals, dist)
+
+    success = fit_ok(g, fit_g, start_mean, start_amp, start_std)
+
+    return g, fit_g, success
+
+#------------------------------------------------------------
+
+def fit_ok(fit, fitter, start_mean, start_amp, start_std):
+
+    #-- Check for success in the LevMarLSQ fitting
+    if not fitter.fit_info['ierr'] in [1, 2, 3, 4]:
+        return False
+
+    #-- If the peak is too low
+    if fit.amplitude.value < 12:
+        return False
+
+    if not fit.stddev.value:
+        return False
+
+    #-- Check if fitting stayed at initial
+    if not (start_mean - fit.mean.value):
+        return False
+    if not (start_amp - fit.amplitude.value):
+        return False
+
+    #-- Not sure this is possible, but checking anyway
+    if np.isnan(fit.mean.value):
+        return False
+    if (fit.mean.value <= 0) or (fit.mean.value >= 31):
+        return False
+
+    return True
+#-------------------------------------------------------------------------------
+def make_total_gainmap(hv_lvl, gainmap_dir=None, segment='FUVB', start_mjd=55055, end_mjd=70000, reverse=False):
+    """Make total gainmaps for each HV level and the total over gainmap.
+
+    Parameters
+    ----------
+    hv_lvl: int
+        High voltage for gainmap you want to make.
+    gainmap_dir: str
+        Path to directory where gainmap are located.
+    segment: str
+        FUV segment you wish you to make the gainmap for.
+    start_mjd: int
+        Start date of for gainmaps you want to build. (Default will catch first gainmap)
+    end_mjd: int
+        End date that gainmaps should have. (Default will be date way after recent gainmap)
+    reverse: bool
+        Trend gain backwards to get intitial gainmap.
+    
+    Returns
+    -------
+    gainmap
+    """
     #-- Depending on the segment, the filename are different.
     if segment == 'FUVA':
         search_string = 'l_*_00_{}_cci_gainmap.fits*'.format(hv_lvl)
@@ -404,8 +520,7 @@ def make_total_gainmap(hv_lvl, gainmap_dir=None, segment='FUV', start_mjd=55055,
 
 #-------------------------------------------------------------------------------
 def make_all_gainmaps(gainmap_dir, start_mjd=55055, end_mjd=70000, total=False):
-    """
-    Make all of the total gainmaps.
+    """Make all of the total gainmaps.
 
     Parameters
     ----------
@@ -417,6 +532,10 @@ def make_all_gainmaps(gainmap_dir, start_mjd=55055, end_mjd=70000, total=False):
         End date that gainmaps should have. (Default will be date way after recent gainmap)
     total: bool
         Make gainmap from all HV levels. 
+    
+    Returns
+    -------
+    None
     """
 
     if total:
@@ -454,7 +573,6 @@ def make_all_gainmaps(gainmap_dir, start_mjd=55055, end_mjd=70000, total=False):
             hdu_out = fits.HDUList(fits.PrimaryHDU())
 
             #-- Adding primary header with file specifications to make results reproducible
-
             hdu_out[0].header['TELESCOP'] = 'HST'
             hdu_out[0].header['INSTRUME'] = 'COS'
             hdu_out[0].header['DETECTOR'] = 'FUV'
@@ -483,7 +601,19 @@ def make_all_gainmaps(gainmap_dir, start_mjd=55055, end_mjd=70000, total=False):
 
 def write_and_pull_gainmap(cci_name, out_dir='None'):
     """Make modal gainmap for cos cumulative image.
+    This writes to the gain table in cosmo.
 
+    Parameters
+    ----------
+    cci_name: peeewee row object
+        Row from files table with CCI filename and path
+    out_dir: str
+        Directory you want to write your gainmap out to.
+
+    Yields
+    ------
+    info: dict
+        A dictionary of values that populate a row 
     """
 
     #-- Get settings

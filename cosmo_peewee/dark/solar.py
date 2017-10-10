@@ -51,7 +51,7 @@ def grab_solar_files(file_dir):
 #-------------------------------------------------------------------------------
 
 def compile_txt(file_dir):
-    """ Pull desired columns from solar data text files
+    """Pull desired columns from solar data text files
 
     Parameters
     ----------
@@ -79,20 +79,26 @@ def compile_txt(file_dir):
             logger.debug("Removing duplicate observations: {}".format(item))
             os.remove(item)
             continue
-
-        data = ascii.read(item, data_start=1, comment='[#,:]')
+        
+        #-- astropy.ascii no longer returns an empty table for empty files
+        #-- Throws IndexError, we will go around it if empty.
+        try:
+            data = ascii.read(item, data_start=1, comment='[#,:]')
+        except IndexError:
+            continue
 
         for line in data:
             line_date = Time('{}-{}-{} 00:00:00'.format(line['col1'],
                                                         line['col2'],
                                                         line['col3']),
-                             scale='utc', format='iso').mjd
+                            scale='utc', format='iso').mjd
+            
             line_flux = line[3]
 
             if line_flux > 0:
                 date.append(line_date)
                 flux.append(line_flux)
-
+    
     return np.array(date), np.array(flux)
 
 #-------------------------------------------------------------------------------

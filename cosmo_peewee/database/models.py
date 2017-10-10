@@ -61,7 +61,9 @@ def get_database(config_file=None):
                                    host=settings['host'],
                                    port=settings['port'],
                                    user=settings['user'],
-                                   passwd=settings['password'], stale_timeout=150)
+                                   passwd=settings['password'], 
+                                   stale_timeout=150,
+                                   max_connections=30)
     return database
 
 #-------------------------------------------------------------------------------
@@ -388,7 +390,7 @@ class Flagged_Pixels(BaseModel):
     segment = CharField()
     hv_lvl = IntegerField()
     mjd_below_3 = FloatField()
-
+    recovery = BooleanField()
     filename = ForeignKeyField(Gain,
                                db_column='filename',
                                default=None,

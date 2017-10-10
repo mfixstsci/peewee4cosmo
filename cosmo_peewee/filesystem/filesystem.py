@@ -59,7 +59,7 @@ def find_datasets(data_dir):
 
     for root, dirs, files in os.walk(data_dir):
         for filename in files:
-            if not '.fits' in filename:
+            if not '.fits.gz' in filename:
                 continue
             datasets.append((root, filename))
 
