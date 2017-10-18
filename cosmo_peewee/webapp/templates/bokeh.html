@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">
@@ -10,4 +10,14 @@
   <body>
     {{ plot_div|indent(4)|safe }}
   </body>
-</html>
+</html> -->
+
+<div class="container">
+    <h1>COS {{ monitor_name }}</h1>
+
+    {% for script, div in plots %}    
+      {{ script|indent(4)|safe }}    
+      {{ div|indent(4)|safe }}
+    {% endfor %}
+
+</div>

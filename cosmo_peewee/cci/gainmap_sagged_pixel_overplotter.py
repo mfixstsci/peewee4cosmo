@@ -194,7 +194,7 @@ def hotspot_plotter_interactive(segment):
         result[d['segment'], d['x'], d['y']].append(d)
     
     #-- If plots exist, delete to rewrite.
-    plots = glob.glob(os.path.join(settings['monitor_location'],'CCI','hotspot_plots') + '/*html')
+    plots = glob.glob(os.path.join(settings['monitor_location'],'CCI','hotspot_plots') + '/*{}.html'.format(segment))
     if len(plots):
         for plot in plots:
             remove_if_there(plot)

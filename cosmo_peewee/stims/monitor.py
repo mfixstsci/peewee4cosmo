@@ -183,8 +183,11 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
 
     #-- change this to pull brf file from the header if not specified    
     if not brf_file:
-        brf_file = os.path.join(os.environ['lref'], 's7g1700el_brf.fits')
-
+        try:
+            brf_file = os.path.join(os.environ['lref'], 's7g1700el_brf.fits')
+        except KeyError:
+            settings = get_settings()
+            brf_file = os.path.join(settings['lref'], 's7g1700el_brf.fits')
     DAYS_PER_SECOND = 1. / 60. / 60. / 24.
 
     file_path, file_name = os.path.split(full_path)
@@ -287,7 +290,11 @@ def make_position_panel(segment, stim):
     """
     
     #-- Open brftab and get some data.
-    brf_file = os.path.join(os.environ['lref'], 's7g1700el_brf.fits')
+    try:
+        brf_file = os.path.join(os.environ['lref'], 's7g1700el_brf.fits')
+    except KeyError:
+        settings = get_settings()
+        brf_file = os.path.join(settings['lref'], 's7g1700el_brf.fits')
     brf = fits.getdata(brf_file, 1)
 
     #-- Build "box" that stims should be contained in.
@@ -430,7 +437,7 @@ def make_position_panel(segment, stim):
 
     return p
 #-------------------------------------------------------------------------------
-def make_time_plot(segment):
+def make_time_plot(segment, web_app=False):
     """Make the plot of the stim positions in 1d as a function of time for x + y
     for each segment.
 
@@ -439,6 +446,9 @@ def make_time_plot(segment):
     segment: str
         FUVA or FUVB
 
+    web_app: bool
+        If using the webapp we want to return the bokeh figure.
+
     Returns
     -------
     None
@@ -446,7 +456,7 @@ def make_time_plot(segment):
     settings = get_settings()
     monitor_dir = settings['monitor_location']
 
-    outname = os.path.join(monitor_dir, 'stim_time_{}.html'.format(segment))
+    outname = os.path.join(monitor_dir,'Stims','stim_time_{}.html'.format(segment))
     remove_if_there(outname)
     output_file(outname)
 
@@ -494,7 +504,12 @@ def make_time_plot(segment):
     database.close()
     
     full_plot = gridplot([[panels[0], panels[1]], [panels[2], panels[3]]])
-    save(full_plot, filename=outname)
+    
+    #-- Logic for web app.
+    if web_app:
+        return full_plot
+    else:
+        save(full_plot, filename=outname)
 #-------------------------------------------------------------------------------
 def make_stretch_panel(segment, left_stim, right_stim, reverse_stims=False):
     """Make plotting panel of stim 'stretch' in x or y.

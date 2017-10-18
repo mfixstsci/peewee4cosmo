@@ -368,7 +368,7 @@ def make_plots(detector, base_dir, TA=False):
 
     try:
         solar_data = np.genfromtxt(os.path.join(base_dir, 'solar_flux.txt'), dtype=None)
-        solar_date = np.array( mjd_to_decyear([line[0] for line in solar_data]) )
+        solar_date = np.array(mjd_to_decyear([line[0] for line in solar_data]))
         solar_flux = np.array([line[1] for line in solar_data])
     except TypeError:
         logger.warning("COULDN'T READ SOLAR DATA. PUTTING IN ZEROS.")

@@ -4,21 +4,66 @@
 
 {% block content %}
 <div class="container">
-    
     <h1>COSMO Monitoring Page</h1>
-    <p>Here you can access all of the infomation and deliverables about the monitors included in the COSMO monitoring suite.</p>
+    <p>Here you can access all of the infomation and deliverables about the monitors included
+    in the COSMO monitoring suite.
+    </p>
 
     <div class="row">
       <div class="col-lg-4">
           <h2>Dark Monitor</h2>
-          <p><a class="btn btn-default" href="/monitoring/dark_monitor">View details »</a></p>
+          <form method='POST' action="{{ url_for('dark_monitor') }}">
+              <p><button id="darks" type="submit" class="btn btn-default">Create Figure »</button></p>
+          </form>
       </div>
 
       <div class="col-lg-4">
           <h2>Lampflash Monitor</h2>
-          <p><a class="btn btn-default" href="/monitoring/lampflash_monitor">View details »</a></p>
+          <p><a class="btn btn-default" href="/monitoring/loader" value="/monitoring/lampflash_monitor">View Plots »</a></p>
+      </div>
+
+      <div class="col-lg-4">
+        <h2>Stim Pulse Monitor</h2>
+        <form method='POST' action="{{ url_for('stim_monitor') }}">
+            <p><button id="stims" type="submit" class="btn btn-default">Create Figure »</button></p>
+        </form>
+      </div>
+
+      <div class="col-lg-4">
+        <h2>Gain Sag Monitor</h2>
+        <form method='POST' action="{{ url_for('gainsag_monitor') }}">
+            <div class="col-md-4">
+                <select name="hvlvl_a">
+                    <option value="" disabled="disabled"  style="display:none" selected="selected">FUVA HV</option>
+                    <option value="163">163</option>
+                    <option value="167">167</option>
+                    <option value="169">169</option>
+                    <option value="171">171</option>
+                    <option value="173">173</option>
+                    <option value="178">178</option>
+                </select>
+
+                <select name="hvlvl_b">
+                    <option value="" disabled="disabled"  style="display:none" selected="selected">FUVB HV</option>
+                    <option value="163">163</option>
+                    <option value="167">167</option>
+                    <option value="169">169</option>
+                    <option value="175">175</option>
+                </select>
+            </div>
+            <p><button id="gainsag" type="submit" class="btn btn-default">Create Figure »</button></p>
+        </form>
+      </div>
+
+      <div class="col-lg-4">
+            <h2>Modal Test</h2>
+            <!-- <p><button id="test" type="submit" class="btn btn-default" data-toggle="modal" data-target=".bs-example-modal-lg">test »</button></p> -->
+            <form>
+                <p><button id="test" type="submit" class="btn btn-default">test »</button></p>
+            </form>
       </div>
     </div>
 </div>
+
 {% endblock %}
 

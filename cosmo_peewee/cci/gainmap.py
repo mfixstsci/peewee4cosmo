@@ -519,7 +519,7 @@ def make_total_gainmap(hv_lvl, gainmap_dir=None, segment='FUVB', start_mjd=55055
     return enlarge(out_data, x=X_BINNING, y=Y_BINNING)
 
 #-------------------------------------------------------------------------------
-def make_all_gainmaps(gainmap_dir, start_mjd=55055, end_mjd=70000, total=False):
+def make_all_gainmaps(hv_lvl, gainmap_dir=None, start_mjd=55055, end_mjd=70000, total=False):
     """Make all of the total gainmaps.
 
     Parameters
@@ -568,34 +568,33 @@ def make_all_gainmaps(gainmap_dir, start_mjd=55055, end_mjd=70000, total=False):
         hdu_out.writeto(filename, clobber=True)
         hdu_out.close()
     else:
-        for hv in range(150, 179):
-            filename = os.path.join(gainmap_dir,'total_gain_{}.fits'.format(hv))
-            hdu_out = fits.HDUList(fits.PrimaryHDU())
+        filename = os.path.join(gainmap_dir,'total_gain_{}.fits'.format(hv_lvl))
+        hdu_out = fits.HDUList(fits.PrimaryHDU())
 
-            #-- Adding primary header with file specifications to make results reproducible
-            hdu_out[0].header['TELESCOP'] = 'HST'
-            hdu_out[0].header['INSTRUME'] = 'COS'
-            hdu_out[0].header['DETECTOR'] = 'FUV'
-            hdu_out[0].header['OPT_ELEM'] = 'ANY'
-            hdu_out[0].header['FILETYPE'] = 'GAINMAP'
+        #-- Adding primary header with file specifications to make results reproducible
+        hdu_out[0].header['TELESCOP'] = 'HST'
+        hdu_out[0].header['INSTRUME'] = 'COS'
+        hdu_out[0].header['DETECTOR'] = 'FUV'
+        hdu_out[0].header['OPT_ELEM'] = 'ANY'
+        hdu_out[0].header['FILETYPE'] = 'GAINMAP'
 
-            hdu_out[0].header['EXPSTART'] = start_mjd
-            hdu_out[0].header['EXP_END'] = end_mjd
-            hdu_out[0].header['CCI_DIR'] = gainmap_dir
-            hdu_out[0].header['HVLEVEL'] = hv
-            hdu_out[0].header['DATEMADE'] = (time.strftime("%d/%m/%Y"))
+        hdu_out[0].header['EXPSTART'] = start_mjd
+        hdu_out[0].header['EXP_END'] = end_mjd
+        hdu_out[0].header['CCI_DIR'] = gainmap_dir
+        hdu_out[0].header['HVLEVEL'] = hv_lvl
+        hdu_out[0].header['DATEMADE'] = (time.strftime("%d/%m/%Y"))
 
-            #-- Data ext
-            hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv, gainmap_dir, 'FUVA', start_mjd, end_mjd, reverse=True)))
-            hdu_out[1].header['EXTNAME'] = 'FUVAINIT'
-            hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv, gainmap_dir, 'FUVB', start_mjd, end_mjd, reverse=True)))
-            hdu_out[2].header['EXTNAME'] = 'FUVBINIT'
-            hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv, gainmap_dir, 'FUVA', start_mjd, end_mjd)))
-            hdu_out[3].header['EXTNAME'] = 'FUVALAST'
-            hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv, gainmap_dir, 'FUVB', start_mjd, end_mjd)))
-            hdu_out[4].header['EXTNAME'] = 'FUVBLAST'
-            hdu_out.writeto(filename, clobber=True)
-            hdu_out.close()
+        #-- Data ext
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, gainmap_dir, 'FUVA', start_mjd, end_mjd, reverse=True)))
+        hdu_out[1].header['EXTNAME'] = 'FUVAINIT'
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, gainmap_dir, 'FUVB', start_mjd, end_mjd, reverse=True)))
+        hdu_out[2].header['EXTNAME'] = 'FUVBINIT'
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, gainmap_dir, 'FUVA', start_mjd, end_mjd)))
+        hdu_out[3].header['EXTNAME'] = 'FUVALAST'
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, gainmap_dir, 'FUVB', start_mjd, end_mjd)))
+        hdu_out[4].header['EXTNAME'] = 'FUVBLAST'
+        hdu_out.writeto(filename, clobber=True)
+        hdu_out.close()
 
 #-------------------------------------------------------------------------------
 

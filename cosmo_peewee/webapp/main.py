@@ -3,26 +3,30 @@ from ..database.models import get_settings, get_database
 from ..database.models import Files
 from ..database.models import Darks, Lampflash, Rawacqs
 
-from ..dark.interactive_plots import plot_time
-
 from ..osm.monitor import make_shift_table
 from ..osm.monitor import make_interactive_plots as osm_interactive_plots
+
 from ..dark.interactive_plots import plot_time as dark_interactive_plots
 from ..dark.monitor import mjd_to_decyear 
+
+from ..stims.monitor import make_position_panel, make_stretch_panel, make_time_plot
 
 from bokeh.embed import components
 from bokeh.plotting import figure
 from bokeh.resources import INLINE
 from bokeh.util.string import encode_utf8
+from bokeh.io import gridplot
 
-from astropy.io import ascii
+from astropy.io import ascii, fits
 
 import os
 
 import numpy as np
 
+import glob
+
 from jinja2 import Markup
-from flask import Flask, Response, redirect, json, render_template, request, session, url_for
+from flask import Flask, Response, redirect, json, render_template, request, session, url_for, make_response
 from wtforms import Form, BooleanField, StringField, validators
 from werkzeug.utils import secure_filename
 import wtforms
@@ -30,6 +34,15 @@ import wtforms
 import datetime
 
 from form_options import FORM_OPTIONS
+
+import datetime
+import StringIO
+import random
+
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
+from matplotlib.dates import DateFormatter
+import matplotlib.pyplot as plt
 #-------------------------------------------------------------------------------
 #-- Global Constants
 DETECTORS = (
@@ -165,7 +178,7 @@ def monitors():
     return render_template('monitors.html')
     
 #-------------------------------------------------------------------------------
-@app.route('/monitoring/lampflash_monitor')
+@app.route('/monitoring/lampflash_monitor',methods=['POST','GET'])
 def osm_monitor():
     """
     Renders the Lampflash monitoring plots
@@ -209,7 +222,7 @@ def osm_monitor():
     )
     return encode_utf8(html)
 #-------------------------------------------------------------------------------
-@app.route('/monitoring/dark_monitor')
+@app.route('/monitoring/dark_monitor',methods=['POST'])
 def dark_monitor():
     """
     Renders the dark monitor plots.
@@ -291,6 +304,155 @@ def dark_monitor():
     )
     return encode_utf8(html)
 #-------------------------------------------------------------------------------
+@app.route('/monitoring/stim_monitor', methods=['POST'])
+def stim_monitor():
+    """
+    Renders the stim monitor plots.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    Stim monitor plots.
+    """
+
+    plots = []
+    figs = []
+    
+    settings = get_settings()
+    monitor_dir = settings['monitor_location']
+
+    #--grab the static resources
+    js_resources = INLINE.render_js()
+    css_resources = INLINE.render_css()
+
+    #-- Start Position Plotting
+    FUVA_upper = make_position_panel('FUVA', 'upper')
+    FUVA_lower = make_position_panel('FUVA', 'lower')
+    FUVB_upper = make_position_panel('FUVB', 'upper')
+    FUVB_lower = make_position_panel('FUVB', 'lower')
+    
+    position_fig = gridplot([[FUVA_upper, FUVA_lower], [FUVB_upper, FUVB_lower]])
+    figs.append(position_fig)
+    #-- End Position
+
+    #-- Start Time Plotting
+    time_fig_A = make_time_plot('FUVA', web_app=True)
+    figs.append(time_fig_A)
+    time_fig_B = make_time_plot('FUVB', web_app=True)
+    figs.append(time_fig_B)
+    #-- End Time
+
+    #-- Start Stretch Plotting
+    FUVA_x_stretch = make_stretch_panel('FUVA', 'stim1_x', 'stim2_x')
+    FUVA_y_stretch = make_stretch_panel('FUVA', 'stim1_y', 'stim2_y', reverse_stims=True)
+    FUVB_x_stretch = make_stretch_panel('FUVB', 'stim1_x', 'stim2_x')
+    FUVB_y_stretch = make_stretch_panel('FUVB', 'stim1_y', 'stim2_y', reverse_stims=True)
+    
+    stretch_fig = gridplot([[FUVA_x_stretch, FUVA_y_stretch], [FUVB_x_stretch, FUVB_y_stretch]])
+    figs.append(stretch_fig)
+    #-- End Stretch
+
+    for fig in figs:
+        script, div = components(fig)
+        plots.append((script, div))
+    #-----------------------------------
+    #-- Make plots appear in website.
+    html = render_template(
+        'individual_monitor.html',
+        plots=plots,
+        js_resources=js_resources,
+        css_resources=css_resources,
+        monitor_name='Stim Pulse Monitor',
+    )
+    return encode_utf8(html)
+#-------------------------------------------------------------------------------
+@app.route('/monitoring/gainsag_monitor', methods=['GET', 'POST'])
+def gainsag_monitor():
+    #-- Open settings
+    settings = get_settings()
+    #-- Get hv_lvl from select html class
+    hv_lvl_a = int(request.form['hvlvl_a'])
+    hv_lvl_b = int(request.form['hvlvl_b'])
+    
+    #-- Get most recent gsagtab
+    gsagtabs = glob.glob(os.path.join(settings['monitor_location'], 'CCI', 'gsag*')).sort()
+    latest_gsagtab = fits.open(gsagtabs[-1:][0])
+
+    #-- gsagtab keywords for high voltage are HVLEVEL[A/B].
+    hvlvl_key = {'FUVA':'HVLEVELA',
+                 'FUVB':'HVLEVELB'}
+    fuva_total_gainmap = fits.open(os.path.join(settings['monitor_location'], 'CCI','total_gain_{}.fits'.format(hv_lvl_a)))
+    fuvb_total_gainmap = fits.open(os.path.join(settings['monitor_location'], 'CCI','total_gain_{}.fits'.format(hv_lvl_b)))
+
+    #-- Find which extension in the GSAGTAB matches the HVLVL and SEGMENT for the gainmap.
+    for ext in range(1, len(latest_gsagtab)):
+        gsagtab_segment = latest_gsagtab[ext].header['segment']
+        if (hv_lvl_a == latest_gsagtab[ext].header[hvlvl_key[gsagtab_segment]]) and (latest_gsagtab[ext].header['segment']=='FUVA'):
+            fuva_gsag_ext = ext
+        elif (hv_lvl_b == latest_gsagtab[ext].header[hvlvl_key[gsagtab_segment]]) and (latest_gsagtab[ext].header['segment']=='FUVB'):
+            fuvb_gsag_ext = ext
+        else:
+            pass
+    
+    #-- Create figure.
+    f, axarr = plt.subplots(2, figsize=(20,15))
+
+    #-- Set some plotting peramimeters.
+    plt.rc('xtick', labelsize=20) 
+    plt.rc('ytick', labelsize=20)
+    plt.rc('axes', lw=2)
+
+    axes_font = 18
+    title_font = 15
+
+    #-- FUVA PANAL
+    gm = axarr[0].imshow(fuva_total_gainmap['FUVALAST'].data, aspect='auto', cmap='gist_gray')
+    f.colorbar(gm, ax=axarr[0])
+    axarr[0].scatter(latest_gsagtab[fuva_gsag_ext].data['LX'], latest_gsagtab[fuva_gsag_ext].data['LY'], marker='+', color='red', label='DQ 8192')    
+    axarr[0].legend(fontsize=15)
+
+    axarr[0].set_title('SEGMENT: FUVA, HVLEVEL: {}'.format(hv_lvl_a), fontsize=title_font, fontweight='bold')
+    axarr[0].set_xlabel('X (Pixels)', fontsize=axes_font, fontweight='bold')
+    axarr[0].set_ylabel('Y (Pixels)', fontsize=axes_font, fontweight='bold')
+
+    axarr[0].set_xlim([400, 15500])
+    axarr[0].set_ylim([200 , 800])
+    #-- END FUVA PANEL
+
+    #-- FUVB PANEL
+    gm = axarr[1].imshow(fuvb_total_gainmap['FUVBLAST'].data, aspect='auto', cmap='gist_gray')
+    f.colorbar(gm, ax=axarr[1])
+    axarr[1].scatter(latest_gsagtab[fuvb_gsag_ext].data['LX'], latest_gsagtab[fuvb_gsag_ext].data['LY'], marker='+', color='red', label='DQ 8192')    
+    axarr[1].legend(fontsize=15)
+    
+    axarr[1].set_title('SEGMENT: FUVB, HVLEVEL: {}'.format(hv_lvl_b), fontsize=title_font, fontweight='bold')
+    axarr[1].set_xlabel('X (Pixels)', fontsize=axes_font, fontweight='bold')
+    axarr[1].set_ylabel('Y (Pixels)', fontsize=axes_font, fontweight='bold')
+
+    axarr[1].set_xlim([400, 15400])
+    axarr[1].set_ylim([350, 800])
+
+    canvas=FigureCanvas(f)
+    png_output = StringIO.StringIO()
+    canvas.print_png(png_output)
+    response=make_response(png_output.getvalue())
+    response.headers['Content-Type'] = 'image/png'
+    return response
+
+    # -- END FUVB PANEL
+#-------------------------------------------------------------------------------
+@app.route('/monitoring/loader', methods=['GET', 'POST'])
+def loader():
+    html = render_template(
+        'loader.html',
+        monitor_name='Lampflash Monitor',
+        monitor_link='/monitoring/lampflash_monitor'
+    )
+    return encode_utf8(html)
+#-------------------------------------------------------------------------------
 def run():
     """
     Run Flask server
@@ -303,7 +465,6 @@ def run():
     -------
     None
     """
-
     app.run()
 #-------------------------------------------------------------------------------
 def run_debug():

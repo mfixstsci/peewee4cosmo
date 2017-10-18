@@ -51,6 +51,8 @@ from .gainmap import make_all_gainmaps
 from .gainmap_sagged_pixel_overplotter import make_overplot, hotspot_plotter_interactive
 
 import collections
+import functools
+import multiprocessing as mp
 #------------------------------------------------------------
 
 def main(out_dir):
@@ -76,10 +78,17 @@ def main(out_dir):
     
     logger.info("MAKING NEW GSAGTAB")
     new_gsagtab = make_gsagtab_db(out_dir, filter=True)
-    # new_gsagtab = make_gsagtab_db(out_dir)
+    
+    #-- Pooled gainmap creation.
     logger.info("MAKING COMBINED GAINMAPS")
-    make_all_gainmaps(os.path.join(settings['monitor_location'],'CCI'), start_mjd=55055, end_mjd=70000)
-    make_all_gainmaps(os.path.join(settings['monitor_location'],'CCI'), start_mjd=55055, end_mjd=70000, total=True)
+    partial = functools.partial(make_all_gainmaps, 
+                                gainmap_dir=os.path.join(settings['monitor_location'],'CCI'))
+    
+    # pool = mp.Pool(processes=settings['num_cpu'])
+    # pool.map(partial, range(150,179))
+
+    # #-- HV Level doest matter when total=True.    
+    # make_all_gainmaps(100, gainmap_dir=os.path.join(settings['monitor_location'],'CCI'), start_mjd=55055, end_mjd=70000, total=True)
     
     logger.info("MAKING GAINMAP + GSAG OVERPLOT")
     make_overplot(new_gsagtab)
@@ -352,10 +361,10 @@ def check_pixel_recovery(segment):
 
     #-- Get all of the flagged pixels at LP4
     flagged_pixels = Flagged_Pixels.select().distinct().where(
+                                                             (Flagged_Pixels.recovery == False) &
                                                              (Flagged_Pixels.y.between(lp4_profile[segment][0],lp4_profile[segment][1])) &
                                                              (Flagged_Pixels.x.between(1000//X_BINNING,15000//X_BINNING)) &
-                                                             (Flagged_Pixels.segment == segment) &
-                                                             (Flagged_Pixels.recovery == False)
+                                                             (Flagged_Pixels.segment == segment)
                                                              )
     
     #-- Get all measurements for all of the x,y pixels returned.    

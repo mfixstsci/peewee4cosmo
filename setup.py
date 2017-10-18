@@ -21,6 +21,7 @@ setup(
                                         'drop_tables=cosmo_peewee.database:drop_tables',
                                         'cosmo_webapp=cosmo_peewee.webapp.main:run',
                                         'cosmo_webapp_debug=cosmo_peewee.webapp.main:run_debug',
+					'cosmo_dark_period=cosmo_peewee.dark.dark_periodicity:main',
                                         ],
     },
     install_requires = ['setuptools',
