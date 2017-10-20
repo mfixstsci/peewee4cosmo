@@ -26,6 +26,8 @@ from bokeh.io import output_file, show, save
 from bokeh.plotting import figure
 
 import numpy as np
+
+from scipy.fftpack import fft
 #------------------------------------------------------------------------------
 def create_periodogram(x, y, outname):
     """
@@ -46,7 +48,41 @@ def create_periodogram(x, y, outname):
     """
     
     plt_hgt = 600
-    plt_wth = 800
+    plt_wth = 900
+
+    output_file(outname)
+
+    frequency, power = LombScargle(x, y).autopower()
+    
+    p = figure(width=plt_wth, height=plt_hgt, title='Periodogram')
+    p.title.text_font_size = '15pt'
+    p.line(frequency, power, color="black")
+    p.xaxis.axis_label = "Frequency"
+    p.yaxis.axis_label = "Power"
+
+    save(p, filename=outname)
+
+#------------------------------------------------------------------------------
+def create_periodogram(x, y, outname):
+    """
+    Create periodogram based off of astropy's LombScagle method in stats
+    library.
+
+    Parameters
+    ----------
+    x: list like
+        Variable in x (dark = Time)
+    y: list like 
+        Variable in y (dark = cnts/pix/sec)
+    segment: str
+        FUVA or FUVB
+    Creates
+    -------
+    periodogram
+    """
+    
+    plt_hgt = 600
+    plt_wth = 900
 
     output_file(outname)
 
@@ -81,18 +117,15 @@ def dark_query(start_date, end_date, segment):
     database = get_database()
     database.connect()
 
-    data = Darks.select().where(
-                                (Darks.date >= start_date) &
-                                (Darks.date <= end_date) &
-                                (Darks.detector == segment)
-                               )
+    data = Darks.select().order_by(Darks.date).where(
+                                                     (Darks.date >= start_date) &
+                                                     (Darks.date <= end_date) &
+                                                     (Darks.detector == segment)
+                                                    )
      
-    date = np.array([row.date for row in data])
-    dark = np.array([row.dark for row in data])
-    sorted_index = np.argsort(date)
-    date = date[sorted_index]
-    dark = dark[sorted_index]
-
+    date = Time([row.date for row in data], format='jyear').seconds
+    dark = [row.dark for row in data]
+    print(date.max()-date.min())
     return date, dark 
 #------------------------------------------------------------------------------
 def main():
@@ -102,6 +135,6 @@ def main():
     settings = get_settings()
     for segment in ['FUVA', 'FUVB']:
         out_dir = os.path.join(settings['monitor_location'], 'Darks', 'FUV', 'dark_periodicty_{}.html'.format(segment))
-        date, dark = dark_query(2016, 2017, segment)
+        date, dark = dark_query(2016, 2018, segment)
         create_periodogram(date, dark, out_dir)
 #------------------------------------------------------------------------------

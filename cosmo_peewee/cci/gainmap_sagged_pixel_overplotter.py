@@ -143,6 +143,100 @@ def make_overplot(gainsag_table, bm_hvlvl_a=167, bm_hvlvl_b=175, blue_modes=Fals
     plt.close()
 
 #-------------------------------------------------------------------------------
+def gsagtab_overplot_comparison(hv_lvl, potential_gsagtab=None, current_gsagtab=None):
+    """Compare two gain sag tables to see gain sag progression.
+    Convention is to have latest gain sag table be plotted with red + symbols 
+    and the older table be plotted in green + symbols. This can accept any two 
+    gsagtabs but user must make sure that the potential_gsagtab is created after
+    current_gsagtab to ensure proper output.
+
+    Parameters
+    ----------
+    potential_gsagtab: str
+        path to gsagtab you want to use in pipeline
+    current_gsagtab: str
+        path to gsagtab currently in use
+    """
+
+    filename = 'gsagtab_comparison_{}.pdf'.format(hv_lvl)
+    settings = get_settings()
+    
+    #-- Open gsagtabs
+    potential_hdu = fits.open(potential_gsagtab)
+    current_hdu = fits.open(current_gsagtab)
+
+    #-- Check the hdu lengths to make sure they are the same size.
+    assert (len(potential_hdu) == len(current_hdu)), 'GSAGTABS ARE DIFFERENT LENGTH'
+    gainmap = fits.open(os.path.join(settings['monitor_location'], 'CCI','total_gain_{}.fits'.format(hv_lvl)))
+
+    #-- gsagtab keywords for high voltage are HVLEVEL[A/B].
+    hvlvl_key = {'FUVA':'HVLEVELA',
+                 'FUVB':'HVLEVELB'}
+
+    #-- Find which extension in the GSAGTAB matches the HVLVL and SEGMENT for the gainmap.
+    for ext in range(1, len(current_hdu)):
+        gsagtab_segment = current_hdu[ext].header['segment']
+        if (hv_lvl == current_hdu[ext].header[hvlvl_key[gsagtab_segment]]) and (current_hdu[ext].header['segment']=='FUVA'):
+            fuva_gsag_ext = ext
+        elif (hv_lvl == current_hdu[ext].header[hvlvl_key[gsagtab_segment]]) and (current_hdu[ext].header['segment']=='FUVB'):
+            fuvb_gsag_ext = ext
+        else:
+            pass
+    
+
+    #-- Create figure.
+    f, axarr = plt.subplots(2, figsize=(20,15))
+
+    #-- Set some plotting peramimeters.
+    plt.rc('xtick', labelsize=20) 
+    plt.rc('ytick', labelsize=20)
+    plt.rc('axes', lw=2)
+
+    axes_font = 18
+    title_font = 15
+
+    #-- FUVA PANAL
+    gm = axarr[0].imshow(gainmap['FUVALAST'].data, aspect='auto', cmap='gist_gray')
+    f.colorbar(gm, ax=axarr[0])
+    axarr[0].scatter(potential_hdu[fuva_gsag_ext].data['LX'], potential_hdu[fuva_gsag_ext].data['LY'], marker='+', color='red', label='Latest')
+    axarr[0].scatter(current_hdu[fuva_gsag_ext].data['LX'], current_hdu[fuva_gsag_ext].data['LY'], marker='+', color='green', label='Current')
+    axarr[0].axhline(y=400, lw=2, ls='--', c='red')
+    axarr[0].axhline(y=435, lw=2, ls='--', c='red')
+    
+    axarr[0].legend(fontsize=15)
+
+    axarr[0].set_title('SEGMENT: FUVA, HVLEVEL: {}, Gainmap: {}'.format(hv_lvl, 'total_gain_{}.fits'.format(hv_lvl)), fontsize=title_font, fontweight='bold')
+    axarr[0].set_xlabel('X (Pixels)', fontsize=axes_font, fontweight='bold')
+    axarr[0].set_ylabel('Y (Pixels)', fontsize=axes_font, fontweight='bold')
+
+    axarr[0].set_xlim([400, 15500])
+    axarr[0].set_ylim([200 , 800])
+    #-- END FUVA PANEL
+
+    #-- FUVB PANEL
+    gm = axarr[1].imshow(gainmap['FUVBLAST'].data, aspect='auto', cmap='gist_gray')
+    f.colorbar(gm, ax=axarr[1])
+    axarr[1].scatter(potential_hdu[fuvb_gsag_ext].data['LX'], potential_hdu[fuvb_gsag_ext].data['LY'], marker='+', color='red', label='Latest')
+    axarr[1].scatter(current_hdu[fuvb_gsag_ext].data['LX'], current_hdu[fuvb_gsag_ext].data['LY'], marker='+', color='green', label='Current')
+    axarr[1].axhline(y=460, lw=2, ls='--', c='red')
+    axarr[1].axhline(y=495, lw=2, ls='--', c='red')
+    
+    axarr[1].legend(fontsize=15)
+    
+    axarr[1].set_title('SEGMENT: FUVB, HVLEVEL: {}, Gainmap: {}'.format(hv_lvl, 'total_gain_{}.fits'.format(hv_lvl)), fontsize=title_font, fontweight='bold')
+    axarr[1].set_xlabel('X (Pixels)', fontsize=axes_font, fontweight='bold')
+    axarr[1].set_ylabel('Y (Pixels)', fontsize=axes_font, fontweight='bold')
+
+    axarr[1].set_xlim([400, 15400])
+    axarr[1].set_ylim([350, 800])
+    #-- END FUVB PANEL
+
+    #-- Save figure.
+    plt.savefig(os.path.join(settings['monitor_location'], 'CCI', 'gsagtab_comparisons', filename))
+    #-- Close.
+    plt.close()
+
+#-------------------------------------------------------------------------------
 def hotspot_plotter_interactive(segment):
     """Locate a plot hotspot's gain as a function of time.
 

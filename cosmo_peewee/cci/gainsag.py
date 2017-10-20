@@ -48,7 +48,7 @@ from .constants import *
 from ..database.models import get_database, get_settings, Files
 from ..database.models import Flagged_Pixels, Gain
 from .gainmap import make_all_gainmaps
-from .gainmap_sagged_pixel_overplotter import make_overplot, hotspot_plotter_interactive
+from .gainmap_sagged_pixel_overplotter import make_overplot, hotspot_plotter_interactive, gsagtab_overplot_comparison
 
 import collections
 import functools
@@ -73,16 +73,16 @@ def main(out_dir):
     logger.info("STARTING MONITOR")
     
     logger.info("MAKING HOTSPOT PLOTS")
-    hotspot_plotter_interactive('FUVA')
-    hotspot_plotter_interactive('FUVB')
+    # hotspot_plotter_interactive('FUVA')
+    # hotspot_plotter_interactive('FUVB')
     
     logger.info("MAKING NEW GSAGTAB")
     new_gsagtab = make_gsagtab_db(out_dir, filter=True)
     
     #-- Pooled gainmap creation.
-    logger.info("MAKING COMBINED GAINMAPS")
-    partial = functools.partial(make_all_gainmaps, 
-                                gainmap_dir=os.path.join(settings['monitor_location'],'CCI'))
+    # logger.info("MAKING COMBINED GAINMAPS")
+    # partial = functools.partial(make_all_gainmaps, 
+    #                             gainmap_dir=os.path.join(settings['monitor_location'],'CCI'))
     
     # pool = mp.Pool(processes=settings['num_cpu'])
     # pool.map(partial, range(150,179))
@@ -92,6 +92,19 @@ def main(out_dir):
     
     logger.info("MAKING GAINMAP + GSAG OVERPLOT")
     make_overplot(new_gsagtab)
+
+
+    #-- Current CRDS gsagtab
+    current_gsag_tab = os.path.join(settings['lref'], 'zbn1927gl_gsag.fits')    
+    #-- Set up partials for multiprocessing.
+    partial = functools.partial(gsagtab_overplot_comparison, 
+                                potential_gsagtab=new_gsagtab,
+                                current_gsagtab=current_gsag_tab)
+    
+    #-- Create comparison figures for HV 163-175
+    pool = mp.Pool(processes=settings['num_cpu'])
+    pool.map(partial, range(163,176))
+    
     # make_overplot(new_gsagtab, bm_hvlvl_a=173, bm_hvlvl_b=175, blue_modes=True)
     # blue_gsagtab = make_gsagtab_db(data_dir, blue=True)
     logger.info("FINISH MONITOR")
