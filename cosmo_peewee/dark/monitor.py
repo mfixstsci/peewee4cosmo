@@ -1,5 +1,4 @@
 """Perform regular monitoring of the COS FUV and NUV dark rates
-
 """
 
 from __future__ import print_function, absolute_import, division
@@ -170,7 +169,8 @@ def mjd_to_decyear(time_array):
 
 def pull_orbital_info(data_object, step=25):
     
-    """ Pull second by second orbital information.
+    """ Pull second by second orbital information. This function populates the
+    darks DB table.
 
     Parameters
     ----------
@@ -195,6 +195,7 @@ def pull_orbital_info(data_object, step=25):
 
     hdu = fits.open(full_path)
     
+    #-- Get timeline extension from corrtag
     try:
         timeline = hdu['timeline'].data
         segment = hdu[0].header['segment']
@@ -204,6 +205,7 @@ def pull_orbital_info(data_object, step=25):
         yield info
         raise StopIteration
 
+    #-- Set boundaries based on segment/detector
     if segment == 'N/A':
         segment = 'NUV'
         xlim = (0, 1024)
@@ -220,29 +222,39 @@ def pull_orbital_info(data_object, step=25):
     else:
         raise ValueError('WHAT SEGMENT IS THIS?! {}'.format(segment))
 
+    #-- Get some basic header info.
     info['rootname'] = hdu[0].header['rootname']
     info['targname'] = hdu[0].header['targname']
     info['detector'] = segment
     info['temp'] = get_temp(full_path)
 
+    #-- Break timeline into 25 second intervals from exstart to end.
     times = timeline['time'][::step].copy()
 
+    #-- Get all of the latitude/longtitude measurements.
     lat = timeline['latitude'][:-1][::step].copy().astype(np.float64)
     lon = timeline['longitude'][:-1][::step].copy().astype(np.float64)
 
-    mjd = hdu[1].header['EXPSTART'] + \
-        times.copy().astype(np.float64) * \
-        SECOND_PER_MJD
+    #-- Convert time from mjd.
+    mjd_per_step = hdu[1].header['EXPSTART'] + \
+                   times.copy().astype(np.float64) * \
+                   SECOND_PER_MJD
+    
+    #-- Get the solar longitude and latitude.
     sun_lat = []
     sun_lon = []
-    for item in get_sun_loc(mjd, full_path):
+    for item in get_sun_loc(mjd_per_step, full_path):
         sun_lon.append(item[0])
         sun_lat.append(item[1])
 
-    mjd = mjd[:-1]
+    #-- Grab the last value in the list, this value is used in the plot to show the variation
+    #-- during the exposure.
+    mjd = mjd_per_step[:-1]
 
+    #-- Convert from mjd to decimal year.
     decyear = mjd_to_decyear(mjd)
 
+    #-- Make sure that the exposure actually happened.
     if not len(times):
         logger.debug("TIME ARRAY EMPTY FOR: {}".format(full_path))
         blank = np.array([0])
@@ -250,6 +262,7 @@ def pull_orbital_info(data_object, step=25):
         yield info
         raise StopIteration
 
+    #-- Grab the events list and filter based on PHA that is kept.
     events = hdu['events'].data
     filtered_index = np.where((events['PHA'] > pha[0]) &
                               (events['PHA'] < pha[1]) &
@@ -258,19 +271,22 @@ def pull_orbital_info(data_object, step=25):
                               (events['YCORR'] > ylim[0]) &
                               (events['YCORR'] < ylim[1]))
 
+    #-- For TA's we keep all of the PHA extensions.
     ta_index = np.where((events['XCORR'] > xlim[0]) &
                         (events['XCORR'] < xlim[1]) &
                         (events['YCORR'] > ylim[0]) &
                         (events['YCORR'] < ylim[1]))
 
-    
+    #-- Build a histogram of the events based on PHA extensions.
     counts = np.histogram(events[filtered_index]['time'], bins=times)[0]
     ta_counts = np.histogram(events[ta_index]['time'], bins=times)[0]
 
+    #-- Calculate dark rate [counts/pix/sec]
     npix = float((xlim[1] - xlim[0]) * (ylim[1] - ylim[0]))
     counts = counts / npix / step
     ta_counts = ta_counts / npix / step
 
+    #-- Make sure arrays have same length so we dont crash.
     if not len(lat) == len(counts):
         lat = lat[:-1]
         lon = lon[:-1]
@@ -280,6 +296,7 @@ def pull_orbital_info(data_object, step=25):
     assert len(lat) == len(counts), \
         'ARRAYS ARE NOT EQUAL LENGTH {}:{}'.format(len(lat), len(counts))
 
+    #-- Yield results for each time step that get added to DB.
     if not len(counts):
         logger.debug("ZERO-LENGTH ARRAY FOUND FOR: {}".format(full_path))
         yield info
@@ -293,7 +310,8 @@ def pull_orbital_info(data_object, step=25):
             info['longitude'] = round(lon[i], 7)
             info['sun_lat'] = round(sun_lat[i], 7)
             info['sun_lon'] = round(sun_lon[i], 7)
-
+            info['mjd_per_step'] = mjd_per_step[i]
+            
             yield deepcopy(info)
 
 #-------------------------------------------------------------------------------
@@ -339,7 +357,7 @@ def pha_hist(filename):
 
 #-------------------------------------------------------------------------------
 
-def make_plots(detector, base_dir, TA=False):
+def make_plots(detector, base_dir, TA=False, mjd_per_step=False):
     
     """ Create static monitoring plots for FUV/NUV dark rates.
 
@@ -368,7 +386,10 @@ def make_plots(detector, base_dir, TA=False):
 
     try:
         solar_data = np.genfromtxt(os.path.join(base_dir, 'solar_flux.txt'), dtype=None)
-        solar_date = np.array(mjd_to_decyear([line[0] for line in solar_data]))
+        if mjd_per_step:
+            solar_date = np.array([float(str(line[0]).replace(" ", "-")) for line in solar_data])
+        else:
+            solar_date = np.array(mjd_to_decyear([line[0] for line in solar_data]))
         solar_flux = np.array([line[1] for line in solar_data])
     except TypeError:
         logger.warning("COULDN'T READ SOLAR DATA. PUTTING IN ZEROS.")
@@ -386,8 +407,8 @@ def make_plots(detector, base_dir, TA=False):
         logger.info("MAKING PLOTS FOR {}".format(detector))
 
     for key, segment in zip(search_strings, segments):
-        logger.debug('CREATING TIME PLOT FOR {}:{}'.format(segment, key))
         
+        logger.debug('CREATING TIME PLOT FOR {}:{}'.format(segment, key))
         #-- Query for data here!
         data = Darks.select().where(Darks.detector == segment)
 
@@ -405,7 +426,10 @@ def make_plots(detector, base_dir, TA=False):
         longitude = np.array([item.longitude for item in data])
         sun_lat = np.array([item.sun_lat for item in data])
         sun_lon = np.array([item.sun_lon for item in data])
-        mjd = np.array([item.date for item in data])
+        if mjd_per_step:
+            mjd = np.array([item.mjd_per_step for item in data])
+        else:
+            mjd = np.array([item.date for item in data])
 
         #-- Sort data by date.
         index = np.argsort(mjd)
@@ -427,24 +451,25 @@ def make_plots(detector, base_dir, TA=False):
         #-- Plot histogram of darkrates
         logger.debug('CREATING HISTOGRAM PLOT FOR {}:{}'.format(segment, key))
 
-        for year in set(map(int, date)):
-            if year == 0:
-                continue
-            else:
-                index = np.where( (date >= year) &
-                                (date < year + 1))
-                hist_outname = os.path.join(base_dir, detector, '{}_hist_{}_{}.png'.format(dark_key, year, segment))
-                plot_histogram(dark[index], hist_outname)
+        if not mjd_per_step:
+            for year in set(map(int, date)):
+                if year == 0:
+                    continue
+                else:
+                    index = np.where( (date >= year) &
+                                    (date < year + 1))
+                    hist_outname = os.path.join(base_dir, detector, '{}_hist_{}_{}.png'.format(dark_key, year, segment))
+                    plot_histogram(dark[index], hist_outname)
 
-                inter_outname = os.path.join(base_dir, detector, '{}_interactive_{}_{}.html'.format(dark_key, year, segment))
-                interactive_plot_time(detector, dark[index], mjd[index], temp[index], solar_flux, solar_date, inter_outname)
+                    inter_outname = os.path.join(base_dir, detector, '{}_interactive_{}_{}.html'.format(dark_key, year, segment))
+                    interactive_plot_time(detector, dark[index], mjd[index], temp[index], solar_flux, solar_date, inter_outname)
 
-        index = np.where(date >= date.max() - .5)
-        outname = os.path.join(base_dir, detector, '{}_hist_-6mo_{}.png'.format(dark_key, segment))
-        plot_histogram(dark[index], outname )
+            index = np.where(date >= date.max() - .5)
+            outname = os.path.join(base_dir, detector, '{}_hist_-6mo_{}.png'.format(dark_key, segment))
+            plot_histogram(dark[index], outname )
 
-        outname = os.path.join(base_dir, detector, '{}_hist_{}.png'.format(dark_key, segment))
-        plot_histogram(dark, outname)
+            outname = os.path.join(base_dir, detector, '{}_hist_{}.png'.format(dark_key, segment))
+            plot_histogram(dark, outname)
 
         #-- Dark vs Time Plots.
         #-- Restrict to avoid SAA (?)
@@ -456,12 +481,21 @@ def make_plots(detector, base_dir, TA=False):
         logger.debug('CREATING INTERACTIVE VS TIME PLOT FOR {}:{}'.format(segment, key))
         
         #-- Interactive plots
-        outname = os.path.join(base_dir, detector, '{}_vs_time_{}.html'.format(dark_key, segment))
+        if mjd_per_step:
+            outname = os.path.join(base_dir, detector, '{}_vs_step_time_{}.html'.format(dark_key, segment))
+        else:
+            outname = os.path.join(base_dir, detector, '{}_vs_time_{}.html'.format(dark_key, segment))
+        
         interactive_plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
 
-        #-- Static plots
-        outname = os.path.join(base_dir, detector, '{}_vs_time_{}.png'.format(dark_key, segment))
-        plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
+        if not mjd_per_step:
+            #-- Static plots
+            if mjd_per_step:
+                outname = os.path.join(base_dir, detector, '{}_vs_step_time_{}.png'.format(dark_key, segment))
+            else:
+                outname = os.path.join(base_dir, detector, '{}_vs_time_{}.png'.format(dark_key, segment))
+
+            plot_time(detector, dark, mjd, temp, solar_flux, solar_date, outname)
 #-------------------------------------------------------------------------------
 
 def move_products(base_dir, web_dir):
@@ -552,9 +586,10 @@ def monitor():
 
     for detector in ['FUV', 'NUV']:
         make_plots(detector, out_dir)
-
+        make_plots(detector, out_dir, mjd_per_step=True)
         if detector == 'FUV':
             make_plots(detector, out_dir, TA=True)
+            make_plots(detector, out_dir, TA=True, mjd_per_step=True)
 
     logger.info("MOVING PRODUCTS TO WEB DIRECTORY")
     move_products(out_dir, web_dir)

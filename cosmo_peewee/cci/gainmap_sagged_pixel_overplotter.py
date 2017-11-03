@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import logging
 logger = logging.getLogger(__name__)
 
+import argparse
 from astropy.io import fits
 import os
 import matplotlib.pyplot as plt
@@ -117,7 +118,7 @@ def make_overplot(gainsag_table, bm_hvlvl_a=167, bm_hvlvl_b=175, blue_modes=Fals
     axarr[0].set_ylabel('Y (Pixels)', fontsize=axes_font, fontweight='bold')
 
     axarr[0].set_xlim([400, 15500])
-    axarr[0].set_ylim([200 , 800])
+    axarr[0].set_ylim([380 ,480])
     #-- END FUVA PANEL
 
     #-- FUVB PANEL
@@ -134,7 +135,7 @@ def make_overplot(gainsag_table, bm_hvlvl_a=167, bm_hvlvl_b=175, blue_modes=Fals
     axarr[1].set_ylabel('Y (Pixels)', fontsize=axes_font, fontweight='bold')
 
     axarr[1].set_xlim([400, 15400])
-    axarr[1].set_ylim([350, 800])
+    axarr[1].set_ylim([450, 530])
     #-- END FUVB PANEL
 
     #-- Save figure.
@@ -143,7 +144,7 @@ def make_overplot(gainsag_table, bm_hvlvl_a=167, bm_hvlvl_b=175, blue_modes=Fals
     plt.close()
 
 #-------------------------------------------------------------------------------
-def gsagtab_overplot_comparison(hv_lvl, potential_gsagtab=None, current_gsagtab=None):
+def gsagtab_overplot_comparison(hv_lvl, compare=False, potential_gsagtab=None, current_gsagtab=None):
     """Compare two gain sag tables to see gain sag progression.
     Convention is to have latest gain sag table be plotted with red + symbols 
     and the older table be plotted in green + symbols. This can accept any two 
@@ -158,15 +159,26 @@ def gsagtab_overplot_comparison(hv_lvl, potential_gsagtab=None, current_gsagtab=
         path to gsagtab currently in use
     """
 
-    filename = 'gsagtab_comparison_{}.pdf'.format(hv_lvl)
+    if compare:
+        filename = 'gsagtab_comparison_{}.pdf'.format(hv_lvl)
+    else:
+        filename = 'gainmap_gsagtab_{}_overplot.pdf'.format(hv_lvl)
+
+    #-- Give blue modes different filename to not overwrite.    
+    if '_blue.fits' in os.path.basename(potential_gsagtab):
+        filename = filename.replace('.pdf', '_blue.pdf')
+
     settings = get_settings()
     
     #-- Open gsagtabs
     potential_hdu = fits.open(potential_gsagtab)
-    current_hdu = fits.open(current_gsagtab)
+    if compare:
+        current_hdu = fits.open(current_gsagtab)
 
     #-- Check the hdu lengths to make sure they are the same size.
-    assert (len(potential_hdu) == len(current_hdu)), 'GSAGTABS ARE DIFFERENT LENGTH'
+    if compare:
+        assert (len(potential_hdu) == len(current_hdu)), 'GSAGTABS ARE DIFFERENT LENGTH'
+    
     gainmap = fits.open(os.path.join(settings['monitor_location'], 'CCI','total_gain_{}.fits'.format(hv_lvl)))
 
     #-- gsagtab keywords for high voltage are HVLEVEL[A/B].
@@ -174,11 +186,11 @@ def gsagtab_overplot_comparison(hv_lvl, potential_gsagtab=None, current_gsagtab=
                  'FUVB':'HVLEVELB'}
 
     #-- Find which extension in the GSAGTAB matches the HVLVL and SEGMENT for the gainmap.
-    for ext in range(1, len(current_hdu)):
-        gsagtab_segment = current_hdu[ext].header['segment']
-        if (hv_lvl == current_hdu[ext].header[hvlvl_key[gsagtab_segment]]) and (current_hdu[ext].header['segment']=='FUVA'):
+    for ext in range(1, len(potential_hdu)):
+        gsagtab_segment = potential_hdu[ext].header['segment']
+        if (hv_lvl == potential_hdu[ext].header[hvlvl_key[gsagtab_segment]]) and (potential_hdu[ext].header['segment']=='FUVA'):
             fuva_gsag_ext = ext
-        elif (hv_lvl == current_hdu[ext].header[hvlvl_key[gsagtab_segment]]) and (current_hdu[ext].header['segment']=='FUVB'):
+        elif (hv_lvl == potential_hdu[ext].header[hvlvl_key[gsagtab_segment]]) and (potential_hdu[ext].header['segment']=='FUVB'):
             fuvb_gsag_ext = ext
         else:
             pass
@@ -195,13 +207,39 @@ def gsagtab_overplot_comparison(hv_lvl, potential_gsagtab=None, current_gsagtab=
     axes_font = 18
     title_font = 15
 
+
+    if compare:
+        legend_title = 'Latest'
+    else:
+        legend_title = 'DQ 8192'
+
+    #-- An x1d for LP4 with the 2-zone extraction performed.
+    #-- This is a 1222 exposure, which has the widest profile. 
+    #-- I will pull the encircled enegry contours from this figure.
+    profiles = fits.open(os.path.join(settings['monitor_location'],'CCI', 'ldel01p6q_x1d.fits'))
+
+    #-- Find respective segment information.
+    profile_FUVA = np.where(profiles[1].data['segment'] == 'FUVA')[0][0]
+    profile_FUVB = np.where(profiles[1].data['segment'] == 'FUVB')[0][0]
+
     #-- FUVA PANAL
     gm = axarr[0].imshow(gainmap['FUVALAST'].data, aspect='auto', cmap='gist_gray')
     f.colorbar(gm, ax=axarr[0])
-    axarr[0].scatter(potential_hdu[fuva_gsag_ext].data['LX'], potential_hdu[fuva_gsag_ext].data['LY'], marker='+', color='red', label='Latest')
-    axarr[0].scatter(current_hdu[fuva_gsag_ext].data['LX'], current_hdu[fuva_gsag_ext].data['LY'], marker='+', color='green', label='Current')
-    axarr[0].axhline(y=400, lw=2, ls='--', c='red')
-    axarr[0].axhline(y=435, lw=2, ls='--', c='red')
+    
+    axarr[0].scatter(potential_hdu[fuva_gsag_ext].data['LX'], potential_hdu[fuva_gsag_ext].data['LY'], marker='+', color='red', label=legend_title)
+    if compare:
+        axarr[0].scatter(current_hdu[fuva_gsag_ext].data['LX'], current_hdu[fuva_gsag_ext].data['LY'], marker='+', color='green', label='Current')
+
+    #-- List for header keywords to plot contours
+    contours = ['y_upper_outer', 'y_lower_outer', 'y_lower_inner', 'y_upper_inner']
+    contour_colors = ['r','r','g','g']
+    
+    #-- Loop through and plot the contours with their respective colors.
+    for contour,color in zip(contours, contour_colors):
+        axarr[0].plot(np.arange(len(profiles[1].data[contour][profile_FUVA])), profiles[1].data[contour][profile_FUVA], c=color)
+    
+    # axarr[0].axhline(y=400, lw=2, ls='--', c='red')
+    # axarr[0].axhline(y=435, lw=2, ls='--', c='red')
     
     axarr[0].legend(fontsize=15)
 
@@ -216,10 +254,16 @@ def gsagtab_overplot_comparison(hv_lvl, potential_gsagtab=None, current_gsagtab=
     #-- FUVB PANEL
     gm = axarr[1].imshow(gainmap['FUVBLAST'].data, aspect='auto', cmap='gist_gray')
     f.colorbar(gm, ax=axarr[1])
-    axarr[1].scatter(potential_hdu[fuvb_gsag_ext].data['LX'], potential_hdu[fuvb_gsag_ext].data['LY'], marker='+', color='red', label='Latest')
-    axarr[1].scatter(current_hdu[fuvb_gsag_ext].data['LX'], current_hdu[fuvb_gsag_ext].data['LY'], marker='+', color='green', label='Current')
-    axarr[1].axhline(y=460, lw=2, ls='--', c='red')
-    axarr[1].axhline(y=495, lw=2, ls='--', c='red')
+    
+    axarr[1].scatter(potential_hdu[fuvb_gsag_ext].data['LX'], potential_hdu[fuvb_gsag_ext].data['LY'], marker='+', color='red', label=legend_title)
+    if compare:
+        axarr[1].scatter(current_hdu[fuvb_gsag_ext].data['LX'], current_hdu[fuvb_gsag_ext].data['LY'], marker='+', color='green', label='Current')
+    
+    for contour,color in zip(contours, contour_colors):
+        axarr[1].plot(np.arange(len(profiles[1].data[contour][profile_FUVB])), profiles[1].data[contour][profile_FUVB], c=color)
+
+    # axarr[1].axhline(y=460, lw=2, ls='--', c='red')
+    # axarr[1].axhline(y=495, lw=2, ls='--', c='red')
     
     axarr[1].legend(fontsize=15)
     
@@ -231,11 +275,34 @@ def gsagtab_overplot_comparison(hv_lvl, potential_gsagtab=None, current_gsagtab=
     axarr[1].set_ylim([350, 800])
     #-- END FUVB PANEL
 
+    #-- Plot enclosed energy contours for the blue modes at LP2.
+    #-- FUVA is at hv_lvl 173
+    if hv_lvl == 173:
+        #-- 1096
+        # blue_profiles = fits.open(os.path.join(settings['monitor_location'],'CCI', 'lddy01hqq_x1d.fits.gz'))
+        #-- 1055 
+        blue_profiles = fits.open(os.path.join(settings['monitor_location'],'CCI', 'ldcv20esq_x1d.fits.gz'))
+        #-- Find respective segment information.
+        blue_profile_FUVA = np.where(blue_profiles[1].data['segment'] == 'FUVA')[0][0]        
+        for contour,color in zip(contours, contour_colors):
+            axarr[0].plot(np.arange(len(blue_profiles[1].data[contour][blue_profile_FUVA])), blue_profiles[1].data[contour][blue_profile_FUVA], c=color)
+
+    #-- FUVB is at hv_lvl 175
+    if hv_lvl == 175:
+        #-- 1096
+        # blue_profiles = fits.open(os.path.join(settings['monitor_location'],'CCI', 'lddy01hqq_x1d.fits.gz'))
+        #-- 1055 
+        blue_profiles = fits.open(os.path.join(settings['monitor_location'],'CCI', 'ldcv20esq_x1d.fits.gz'))
+        #-- Find respective segment information.
+        blue_profile_FUVB = np.where(blue_profiles[1].data['segment'] == 'FUVB')[0][0]
+        for contour,color in zip(contours, contour_colors):
+            axarr[1].plot(np.arange(len(blue_profiles[1].data[contour][blue_profile_FUVB])), blue_profiles[1].data[contour][blue_profile_FUVB], c=color)
+
+
     #-- Save figure.
     plt.savefig(os.path.join(settings['monitor_location'], 'CCI', 'gsagtab_comparisons', filename))
     #-- Close.
     plt.close()
-
 #-------------------------------------------------------------------------------
 def hotspot_plotter_interactive(segment):
     """Locate a plot hotspot's gain as a function of time.
@@ -259,8 +326,8 @@ def hotspot_plotter_interactive(segment):
     hv_dictionary = {'FUVA':[163,167,169,171,173,178],
                      'FUVB':[163,167,169,175]}
     
-    lp4_profile ={'FUVA':[400//Y_BINNING, 435//Y_BINNING],
-                  'FUVB':[460//Y_BINNING, 495//Y_BINNING]}
+    lp4_profile ={'FUVA':[400//Y_BINNING, 440//Y_BINNING],
+                  'FUVB':[460//Y_BINNING, 500//Y_BINNING]}
 
     #-- Hot spot for FUVB B1
     hotspots = Gain.select(Gain.x, Gain.y).distinct().where(
@@ -350,4 +417,123 @@ def hotspot_plotter_interactive(segment):
             p.yaxis.axis_label = "Modal Gain"
             p.circle(date, gain, legend=str(hv), size=6, color=next(palette), alpha=0.5)
         save(p, filename=filename)
+#-------------------------------------------------------------------------------
+def gsagtab_plot_by_date():
+    """
+    Plot gain sag holes onto gainmaps.
+
+    Parameters:
+    -----------
+    segment: str
+        FUVA or FUVB
+    min_date: float
+        Lower range for dates to search for
+    max_date:
+        Upper range for dates to search for
+    
+    Returns
+    -------
+    None
+    """
+
+    settings = get_settings()
+    database = get_database()
+
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('--segment',
+                        type=str,
+                        default='FUVB',
+                        help="FUVA or FUVB")
+    
+    parser.add_argument('--min_date',
+                        type=float,
+                        default=55275.0,
+                        help="Minimum date when gainsag holes appeared")
+    
+    parser.add_argument('--max_date',
+                        type=float,
+                        default=58050.0,
+                        help="Minimum date when gainsag holes appeared")
+    
+    parser.add_argument('--compare',
+                        type=bool,
+                        default=False,
+                        help="Compare to CRDS")
+
+    args = parser.parse_args()
+
+    sagged_pix = list(Flagged_Pixels.select().where(
+                                                   (Flagged_Pixels.mjd_below_3.between(args.min_date,args.max_date)) &
+                                                   (Flagged_Pixels.segment == args.segment)
+                                                   ).dicts()
+                                                   )
+    database.close()
+    result = collections.defaultdict(list)
+    
+    #-- Organize all of the pixels by hv_lvls.
+    for d in sagged_pix:
+        result[d['hv_lvl']].append(d)
+    
+    hvlvl_key = {'FUVA':'HVLEVELA',
+                 'FUVB':'HVLEVELB'}
+
+    for hv in result.keys():
+        if hv < 163:
+            continue
+        
+        if args.compare:
+            crds_gsagtab = fits.open(os.path.join(settings['lref'], 'zbn1927gl_gsag.fits'))
+
+            for ext in range(1,len(crds_gsagtab)):
+                try:
+                    if (crds_gsagtab[ext].header[hvlvl_key[args.segment]] == hv) and (crds_gsagtab[ext].header['segment']==args.segment):
+                        lx = crds_gsagtab[ext].data['LX']
+                        ly = crds_gsagtab[ext].data['LY']
+                    else:
+                        continue
+                except KeyError as e:
+                    print(e)
+        
+        if args.compare:
+            lx = [dictionary['x']*X_BINNING for dictionary in sagged_pix]
+            ly = [dictionary['y']*Y_BINNING for dictionary in sagged_pix]
+        
+        else:
+            x = [dictionary['x']*X_BINNING for dictionary in result[hv]]
+            y = [dictionary['y']*Y_BINNING for dictionary in result[hv]]
+        
+        gainmap = fits.open(os.path.join(settings['monitor_location'],'CCI','total_gain_{}.fits'.format(hv)))
+
+        plt.figure(figsize=(20,10))
+        plt.rc('xtick', labelsize=15) 
+        plt.rc('ytick', labelsize=15)
+        plt.rc('axes', lw=2)    
+        
+        plt.imshow(gainmap['{}LAST'.format(args.segment)].data, aspect='auto', cmap='gist_gray')
+        plt.scatter(x, y, marker='+', color='red', label='HV {}'.format(hv))
+        
+        if args.compare:
+            plt.scatter(lx, ly, marker='+', color='green', label='CRDS HV {}'.format(hv))
+        
+        plt.title('Segment {} Gain Map {} For Dates {} -- {}'.format(args.segment,hv, args.min_date, args.max_date), fontsize=15)
+        
+        if args.segment == 'FUVA':
+            plt.xlim(400, 15500)
+            plt.ylim(200 , 800)
+        if args.segment == 'FUVB':
+            plt.xlim(400, 15400)
+            plt.ylim(350, 800)
+        
+        plt.xlabel('XCORR (Pixels)', fontsize=20)
+        plt.ylabel('YCORR (Pixels)', fontsize=20)
+        plt.legend(fontsize=15)
+        
+        if args.compare:
+            filename='gsag_by_date_compare_{}-{}_{}_{}.png'.format(args.min_date, args.max_date, hv, args.segment)
+        else:
+            filename='gsag_by_date_{}-{}_{}_{}.png'.format(args.min_date, args.max_date, hv, args.segment)
+        
+        plt.savefig(os.path.join(settings['monitor_location'], 'CCI', 'gsagtab_comparisons',filename))
+        plt.close()
 #-------------------------------------------------------------------------------

@@ -125,7 +125,7 @@ def plot_histogram(dark, outname):
 
 #-------------------------------------------------------------------------------
 
-def plot_time(detector, dark, date, temp, solar, solar_date, outname):
+def plot_time(detector, dark, date, temp, solar, solar_date, outname, isr=False):
     """Plot the dar-rate vs time
 
     Parameters
@@ -144,7 +144,8 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
         array of solar dates
     outname : str
         name of output plot
-
+    isr: bool
+        Plot for x range of cycle specific ISR.
     """
     
     remove_if_there(outname)
@@ -227,7 +228,8 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
         sub_ax.set_xlim(2009.5, date.max() + .1)
 
         #-- FOR YEARLY ISR
-        # sub_ax.set_xlim(2009.5, 2016.74863388)
+        if isr:
+            sub_ax.set_xlim(2009.5, 2017.74863388)
 
         sub_ax.grid(True)
 
@@ -285,7 +287,8 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
         sub_ax.set_xlim(2009.5, date.max() + .1)
         
         #-- FOR YEARLY ISR
-        # sub_ax.set_xlim(2009.5, 2016.74863388)
+        if isr:
+            sub_ax.set_xlim(2009.5, 2017.74863388)
 
         sub_ax.legend(numpoints=1, shadow=True, loc='best')
         sub_ax.grid(True)

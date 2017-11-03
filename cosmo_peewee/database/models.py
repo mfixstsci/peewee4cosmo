@@ -325,6 +325,7 @@ class Darks(BaseModel):
     sun_lon = FloatField(default=0.0)
     temp = FloatField(default=0.0)
     targname = CharField()
+    mjd_per_step = DecimalField(default=0.0)
 
     rootname = ForeignKeyField(Observations,
                                db_column='rootname',

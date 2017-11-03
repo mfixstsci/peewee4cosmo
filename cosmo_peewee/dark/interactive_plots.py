@@ -67,11 +67,18 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
     output_file(outname)
 
 
-    #-- Begin Bokeh   
+    #-- Check plot data for different date types.
+    if isinstance(date[0], float):
+        min_date = 2009
+        max_date = max(date) + 0.5
+    else:
+        min_date = 54900
+        max_date = float(max(date)) + 100
     
+    #-- Begin Bokeh   
     TOOLS ='box_zoom,box_select,crosshair,pan,reset,hover'
     
-    s1 = figure(width=plt_wth, height=plt_hgt, x_range=(2009, max(date) + 0.5), title='{} Global Dark Rate as of {} EST'.format(detector, strftime("%m-%d-%Y %H:%M:%S", localtime())), tools=TOOLS)
+    s1 = figure(width=plt_wth, height=plt_hgt, x_range=(min_date, max_date), title='{} Global Dark Rate as of {} EST'.format(detector, strftime("%m-%d-%Y %H:%M:%S", localtime())), tools=TOOLS)
     s1.select(dict(type=HoverTool)).tooltips = {"Date":"$x", "Dark Rate":"$y"}
     s1.title.text_font_size = '15pt'
     s1.circle(date, dark, legend='Dark Count Rate',size=4, color="black", alpha=0.5)

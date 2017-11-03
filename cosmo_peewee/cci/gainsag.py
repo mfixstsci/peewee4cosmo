@@ -55,7 +55,7 @@ import functools
 import multiprocessing as mp
 #------------------------------------------------------------
 
-def main(out_dir):
+def main(out_dir, hotspot_filter=True):
     """Main driver for monitoring program.
 
     Parameters
@@ -73,40 +73,51 @@ def main(out_dir):
     logger.info("STARTING MONITOR")
     
     logger.info("MAKING HOTSPOT PLOTS")
-    # hotspot_plotter_interactive('FUVA')
-    # hotspot_plotter_interactive('FUVB')
+    hotspot_plotter_interactive('FUVA')
+    hotspot_plotter_interactive('FUVB')
     
     logger.info("MAKING NEW GSAGTAB")
-    new_gsagtab = make_gsagtab_db(out_dir, filter=True)
-    
-    #-- Pooled gainmap creation.
-    # logger.info("MAKING COMBINED GAINMAPS")
-    # partial = functools.partial(make_all_gainmaps, 
-    #                             gainmap_dir=os.path.join(settings['monitor_location'],'CCI'))
-    
-    # pool = mp.Pool(processes=settings['num_cpu'])
-    # pool.map(partial, range(150,179))
+    reg_gsagtab = make_gsagtab_db(out_dir, filter=hotspot_filter)
+    blu_gsagtab = make_gsagtab_db(out_dir, blue=True)
+    gsagtabs = [reg_gsagtab, blu_gsagtab]
 
-    # #-- HV Level doest matter when total=True.    
-    # make_all_gainmaps(100, gainmap_dir=os.path.join(settings['monitor_location'],'CCI'), start_mjd=55055, end_mjd=70000, total=True)
+    #-- Pooled gainmap creation.
+    logger.info("MAKING COMBINED GAINMAPS")
+    partial = functools.partial(make_all_gainmaps, 
+                                gainmap_dir=os.path.join(settings['monitor_location'],'CCI'))
+    
+    pool = mp.Pool(processes=settings['num_cpu'])
+    pool.map(partial, range(150,179))
+
+    #-- HV Level doest matter when total=True.    
+    make_all_gainmaps(100, gainmap_dir=os.path.join(settings['monitor_location'],'CCI'), start_mjd=55055, end_mjd=70000, total=True)
     
     logger.info("MAKING GAINMAP + GSAG OVERPLOT")
-    make_overplot(new_gsagtab)
+    # make_overplot(reg_gsagtab)
 
 
-    #-- Current CRDS gsagtab
+    #-- Current CRDS gsagtabs
     current_gsag_tab = os.path.join(settings['lref'], 'zbn1927gl_gsag.fits')    
-    #-- Set up partials for multiprocessing.
-    partial = functools.partial(gsagtab_overplot_comparison, 
-                                potential_gsagtab=new_gsagtab,
-                                current_gsagtab=current_gsag_tab)
+    current_blue_tab = os.path.join(settings['lref'], 'zbn1927fl_gsag.fits')
     
+    cdbs_gsagtabs = [current_gsag_tab, current_blue_tab]
     #-- Create comparison figures for HV 163-175
     pool = mp.Pool(processes=settings['num_cpu'])
-    pool.map(partial, range(163,176))
     
-    # make_overplot(new_gsagtab, bm_hvlvl_a=173, bm_hvlvl_b=175, blue_modes=True)
-    # blue_gsagtab = make_gsagtab_db(data_dir, blue=True)
+    for new_gsagtab, calcos_tab in zip(gsagtabs, cdbs_gsagtabs):
+        #-- Set up partials for multiprocessing.
+        partial = functools.partial(gsagtab_overplot_comparison,
+                                    compare=True, 
+                                    potential_gsagtab=new_gsagtab,
+                                    current_gsagtab=calcos_tab)
+        
+        pool.map(partial, [163,167,169,171,173,175,178])
+        
+        #-- Just make overplots without comparing.
+        partial = functools.partial(gsagtab_overplot_comparison,
+                                    potential_gsagtab=new_gsagtab)
+        pool.map(partial, [163,167,169,171,173,175,178])
+
     logger.info("FINISH MONITOR")
 
 #------------------------------------------------------------
@@ -197,6 +208,38 @@ def date_string(date_time):
     date_string = day + '/' + month + '/' + year
     
     return date_string
+#------------------------------------------------------------
+
+def in_boundary(segment, ly, dy):
+    """
+    Check to see if LP2 blue mode pixel is in LP1 gsag region
+    and exclude it from the the blue mode GSAGTAB.
+
+    Parameters
+    ----------
+    segement: str
+        FUVA or FUVB
+    ly: int
+        y pixel position
+    dy: int
+        delta y for binning.
+
+    Returns
+    -------
+    True or False
+    """
+    boundary = {'FUVA': 493, 'FUVB': 557}
+    padding = 4
+
+    boundary_pix = set(np.arange(boundary[segment]-padding,
+                                 boundary[segment]+padding+1))
+
+    affected_pix = set(np.arange(ly, ly+dy+1))
+
+    if affected_pix.intersection(boundary_pix):
+        return True
+
+    return False
 
 #------------------------------------------------------------
 
@@ -291,14 +334,19 @@ def make_gsagtab_db(out_dir, blue=False, filter=False):
 
             hv_level = int(hv_level)
 
-            #-- Get all of the sagged pixels for a specific Segment/HV Level combo.
-            flagged_pix = list(Flagged_Pixels.select().distinct().where(
-                                                                        (Flagged_Pixels.segment == segment) &
-                                                                        (Flagged_Pixels.hv_lvl >= hv_level) &
-                                                                        (Flagged_Pixels.recovery == False)
-                                                                        ).dicts())
-            
-            
+            #-- Logic to filter hotspots or nah.
+            if filter:
+                #-- Get all of the sagged pixels for a specific Segment/HV Level combo.
+                flagged_pix = list(Flagged_Pixels.select().distinct().where(
+                                                                            (Flagged_Pixels.segment == segment) &
+                                                                            (Flagged_Pixels.hv_lvl >= hv_level) &
+                                                                            (Flagged_Pixels.recovery == False)
+                                                                            ).dicts())
+            else:
+                flagged_pix = list(Flagged_Pixels.select().distinct().where(
+                                                                            (Flagged_Pixels.segment == segment) &
+                                                                            (Flagged_Pixels.hv_lvl >= hv_level)
+                                                                            ).dicts())
             result = collections.defaultdict(list)
             #-- for each x,y coodinate pair, create a dictionary where there key is the x,y pair that
             #-- contains a list of dictionaries for all of the entries of that x,y pair.
@@ -309,7 +357,15 @@ def make_gsagtab_db(out_dir, blue=False, filter=False):
             bad_pix = []
             for coord_pair in result.keys():
                 row_bad = min(result[coord_pair], key=lambda x:x['mjd_below_3'])
-            
+
+                #-- Block for blue mode creation. in_boundary checks for LP1 gsag holes that are in the
+                #-- LP2 extraction regions. We want to exclude them because we get low counts in the wings
+                #-- and since blue modes use boxcar extraction it will flag the whole column and we want to avoid that.
+                #-- According to the team, the long term solution would be to only have one gsagtab and LP2 will use 2zone extraction.
+                if blue and in_boundary(row_bad['segment'], row_bad['y']*Y_BINNING, Y_BINNING):
+                    logger.debug("EXCLUDING FOR BLUE MODES: {} {} {}".format(row_bad['segment'], row_bad['y']*Y_BINNING, Y_BINNING))
+                    continue
+
                 #-- Apply binning constant and append values to lists
                 lx.append(row_bad['x']*X_BINNING)
                 dx.append(X_BINNING)
@@ -332,6 +388,8 @@ def make_gsagtab_db(out_dir, blue=False, filter=False):
             logger.debug('found {} bad regions'.format(len(date)))
             tab = gsagtab_extension(date, lx, dx, ly, dy, dq, hv_level, hvlevel_string, segment)
             hdu_out.append(tab)
+    
+    #-- If blue mode, change the naming scheme and the header.
     if blue:
         out_fits = out_fits.replace('.fits', '_blue.fits')
         hdu_out[0].header['CENWAVE'] = 'BETWEEN 1055 1097'
@@ -368,8 +426,8 @@ def check_pixel_recovery(segment):
     database.connect()
     
     #-- Profile widths for LP4. (Super Pixel binned by two.)
-    lp4_profile ={'FUVA':[400//Y_BINNING, 435//Y_BINNING],
-                  'FUVB':[460//Y_BINNING, 495//Y_BINNING]}
+    lp4_profile ={'FUVA':[400//Y_BINNING, 440//Y_BINNING],
+                  'FUVB':[460//Y_BINNING, 500//Y_BINNING]}
 
 
     #-- Get all of the flagged pixels at LP4

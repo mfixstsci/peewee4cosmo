@@ -79,8 +79,8 @@ def bulk_insert(table, data_source, debug=False):
                 print(item)
                 table.insert(**item).execute()
             except IntegrityError as e:
-                print('IntegrityError:', e)
-                print(item['filename'])
+                logger.warning('INTEGRITY ERROR: {}'.format(e))
+                logger.warning('FILE: {} FAILED INSERTION'.format(item['filename']))
         database.close()
     
     #-- Bulk inserts.
@@ -91,16 +91,16 @@ def bulk_insert(table, data_source, debug=False):
             database.close()
         #-- Lots of multiples, hopefully will be fixed with new filesystem implimentation.   
         except IntegrityError as e:
-            print('IntegrityError:', e)
+            logger.warning('INTEGRITY ERROR: {}'.format(e))
             database.close()
         except IOError as e:
-            print('IOError:',  e)
+            logger.warning('IO ERROR: {}'.format(e))
             database.close()
         except OperationalError as e:
-            print('OperationalError', e)
+            logger.warning('OPERATIONAL ERROR: {}'.format(e))
             database.close()
         except InternalError as e:
-            print('InternalError', e)
+            logger.warning('INTERNAL ERROR: {}'.format(e))
             database.close()
 
 #-------------------------------------------------------------------------------
@@ -133,7 +133,7 @@ def pull_data(file_result, function):
         return data
     
     except IOError as e:
-        print('IOError:',  e)
+        logger.warning('IO ERROR: {}'.format(e))
     
 #-------------------------------------------------------------------------------
 
@@ -743,8 +743,8 @@ def run_monitors():
     setup_logging()
     
     # osm_monitor()
-    # dark_monitor()
+    dark_monitor()
     # stim_monitor()
-    cci_main(os.path.join(settings['monitor_location'], 'CCI'))
+    # cci_main(os.path.join(settings['monitor_location'], 'CCI'), hotspot_filter=True)
 
 #-------------------------------------------------------------------------------
