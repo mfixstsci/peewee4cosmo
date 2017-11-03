@@ -120,15 +120,35 @@ todo_include_todos = False
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'classic'
+html_theme = 'alabaster'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-#html_theme_options = {}
+html_theme_options = {
+    'logo'            : 'cos.png', 
+    'logo_name'       : True, 
+    'logo_text_align' : 'center', 
+    'description'     : 'monitor cos fuv/nuv detectors', 
+    'github_user'     : 'mfixstsci',
+    'github_repo'     : 'peewee4cosmo', 
+    'github_button'   : True, 
+    'github_count'    : False, 
+    'github_banner'   : True, 
+    'travis_button'   : True, 
+    'show_powered_by' : False, 
+    'analytics_id'    : 'UA-67123509-3',
+    'page_width'      : 1040,}
 
+html_sidebars = {
+    '**': [
+        'about.html',
+        'localtoc.html', 
+        'searchbox.html',
+    ]
+}
 # Add any paths that contain custom themes here, relative to this directory.
-#html_theme_path = []
+html_theme_path = ['_static']
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
