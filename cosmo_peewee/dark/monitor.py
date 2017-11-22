@@ -316,40 +316,22 @@ def pull_orbital_info(data_object, step=25):
 
 #-------------------------------------------------------------------------------
 
-def compile_phd():
-
-    #-- THIS STILL USES SQLALCHEMY FROM cos_monitoring.
-    #-- MAY DELETE IN THE FUTURE.
-    raise NotImplementedError("Nope, seriously can't do any of this.")
-
-    #-- populate PHD table
-
-    columns = ', '.join(['bin{} real'.format(pha) for pha in range(0,31)])
-    c.execute("""CREATE TABLE {} ( obsname text, {})""".format(table, columns ))
-
-
-    c.execute( """SELECT obsname FROM %s """ %(table))
-    already_done = set( [str(item[0]) for item in c] )
-
-    for filename in available:
-        obsname = os.path.split(filename)[-1]
-        if obsname in already_done:
-            print(filename, 'done')
-        else:
-            print(filename, 'running')
-
-        counts = pha_hist(filename)
-        table_values = (obsname, ) + tuple(list(counts) )
-
-        c.execute( """INSERT INTO %s VALUES (?{})""" % (table, ',?'*31 ),
-                   table_values)
-
-        db.commit()
-
-#-------------------------------------------------------------------------------
-
 def pha_hist(filename):
-    hdu = fits.open( filename )
+    """
+    Build a histogram from corrtag PHA data.
+
+    Parameters
+    ----------
+    filename: str
+        Path to COS FUV corrtag
+    
+    Returns
+    -------
+    counts: np.array
+        Array of values for PHA histogram.
+    """
+    
+    hdu = fits.open(filename)
     pha_list_all = hdu[1].data['PHA']
     counts, bins = np.histogram(pha_list_all, bins=31, range=(0, 31))
 
@@ -357,18 +339,76 @@ def pha_hist(filename):
 
 #-------------------------------------------------------------------------------
 
-def make_plots(detector, base_dir, TA=False, mjd_per_step=False):
+def plot_pha_hist(corrtag_a, corrtag_b):
+    """
+    Plot bar graph of binned counts for FUVA and FUVB corrtags.
+    
+    Parameters
+    ----------
+    corrtag_a: str
+        Path to FUVA corrtag
+    corrtag_b: str
+        Path to FUVB corrtag
+    
+    Returns
+    -------
+    None
+    """
+
+    bins = np.arange(0,31)
+    fs = 20
+    fw = 'bold'
+
+    plt.rc('font', weight='bold')
+    plt.rc('xtick.major', size=5, pad=7)
+    plt.rc('xtick', labelsize=15)
+    plt.rc('ytick', labelsize=15)
+
+    f, (ax1, ax2) = plt.subplots(1,2,figsize=(20, 7))
+
+    #-- get fuva histogram
+    fuva_cnts = pha_hist(corrtag_a)
+    #-- plot fuva
+    ax1.bar(bins, fuva_cnts, width=1, color='b')
+    ax1.set_title('FUVA', fontsize=fs, fontweight=fw)
+    ax1.set_xlabel('PHA Bin', fontsize=fs, fontweight=fw)
+    ax1.set_ylabel('Counts', fontsize=fs, fontweight=fw)
+    ax1.set_xlim([0, 31])
+    ax1.set_ylim([0, 5000])
+    ax1.grid()
+
+    #-- make fuvb histogram
+    fuvb_cnts = pha_hist(corrtag_b)
+    #-- plot fuvb
+    ax2.bar(bins, fuvb_cnts, width=1, color='r')
+    ax2.set_title('FUVB', fontsize=fs, fontweight=fw)
+    ax2.set_xlabel('PHA Bin', fontsize=fs, fontweight=fw)
+    ax2.set_ylabel('Counts', fontsize=fs, fontweight=fw)
+    ax2.set_xlim([0, 31])
+    ax2.set_ylim([0, 5000])
+    ax2.grid()
+
+    plt.show()
+    plt.close()
+    
+#-------------------------------------------------------------------------------
+
+def make_plots(detector, base_dir, TA=False, mjd_per_step=False, isr=False):
     
     """ Create static monitoring plots for FUV/NUV dark rates.
 
     Parameters
     ----------
-    detector : str
+    detector: str
         The COS mode trends you are interested in plotting.
-    base_dir : str
+    base_dir: str
         Directory you are interested in writing to.
-    TA : bool
+    TA: bool
         Flag to monitor target acq dark rate.
+    mjd_per_step: bool
+        Flag to make plots as function of MJD
+    isr: bool
+        Flag to make plots for ISR 
 
     Returns
     -------
@@ -409,8 +449,13 @@ def make_plots(detector, base_dir, TA=False, mjd_per_step=False):
     for key, segment in zip(search_strings, segments):
         
         logger.debug('CREATING TIME PLOT FOR {}:{}'.format(segment, key))
+        
         #-- Query for data here!
-        data = Darks.select().where(Darks.detector == segment)
+        if isr:
+            data = Darks.select().where((Darks.detector == segment) &
+                                        (Darks.date <= 2017.75))
+        else:
+            data = Darks.select().where(Darks.detector == segment)
 
         #-- Parse whether you want to plot dark monitoring or targacq dark.
         if TA:

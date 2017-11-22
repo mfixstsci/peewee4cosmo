@@ -23,6 +23,7 @@ setup(
                                         'cosmo_webapp_debug=cosmo_peewee.webapp.main:run_debug',
 					                    'cosmo_dark_period=cosmo_peewee.dark.dark_periodicity:main',
                                         'cosmo_gsagtab_by_date=cosmo_peewee.cci.gainmap_sagged_pixel_overplotter:gsagtab_plot_by_date',
+                                        'cosmo_data_by_rootname=cosmo_peewee.database.utils:gather_all_data_rootname',
                                         ],
     },
     install_requires = ['setuptools',

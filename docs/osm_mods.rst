@@ -1,5 +1,5 @@
-OSM Monitors
-=============
+OSM Monitor
+===========
 A description of what these modules do...
 
 monitor

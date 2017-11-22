@@ -27,6 +27,8 @@ from bokeh.models import Span
 
 from ..utils import remove_if_there
 
+import datetime
+from astropy.time import Time
 #-------------------------------------------------------------------------------
 def make_overplot(gainsag_table, bm_hvlvl_a=167, bm_hvlvl_b=175, blue_modes=False):
     """
@@ -438,7 +440,10 @@ def gsagtab_plot_by_date():
 
     settings = get_settings()
     database = get_database()
-
+    
+    #-- Current Time
+    now = Time(datetime.datetime.now().isoformat()).mjd
+    
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--segment',
@@ -446,20 +451,21 @@ def gsagtab_plot_by_date():
                         default='FUVB',
                         help="FUVA or FUVB")
     
+    #-- For dates, defaults give sagging activity over the past 10 days.
     parser.add_argument('--min_date',
                         type=float,
-                        default=55275.0,
+                        default=now-10.0,
                         help="Minimum date when gainsag holes appeared")
     
     parser.add_argument('--max_date',
                         type=float,
-                        default=58050.0,
+                        default=now,
                         help="Minimum date when gainsag holes appeared")
     
     parser.add_argument('--compare',
                         type=bool,
                         default=False,
-                        help="Compare to CRDS")
+                        help="Compare to CRDS gsagtab")
 
     args = parser.parse_args()
 
@@ -533,7 +539,7 @@ def gsagtab_plot_by_date():
             filename='gsag_by_date_compare_{}-{}_{}_{}.png'.format(args.min_date, args.max_date, hv, args.segment)
         else:
             filename='gsag_by_date_{}-{}_{}_{}.png'.format(args.min_date, args.max_date, hv, args.segment)
-        
+        print(filename)
         plt.savefig(os.path.join(settings['monitor_location'], 'CCI', 'gsagtab_comparisons',filename))
         plt.close()
 #-------------------------------------------------------------------------------

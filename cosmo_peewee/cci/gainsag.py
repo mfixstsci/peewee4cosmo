@@ -92,10 +92,9 @@ def main(out_dir, hotspot_filter=True):
     #-- HV Level doest matter when total=True.    
     make_all_gainmaps(100, gainmap_dir=os.path.join(settings['monitor_location'],'CCI'), start_mjd=55055, end_mjd=70000, total=True)
     
-    logger.info("MAKING GAINMAP + GSAG OVERPLOT")
+    # logger.info("MAKING GAINMAP + GSAG OVERPLOT")
     # make_overplot(reg_gsagtab)
-
-
+    
     #-- Current CRDS gsagtabs
     current_gsag_tab = os.path.join(settings['lref'], 'zbn1927gl_gsag.fits')    
     current_blue_tab = os.path.join(settings['lref'], 'zbn1927fl_gsag.fits')
@@ -228,6 +227,8 @@ def in_boundary(segment, ly, dy):
     -------
     True or False
     """
+
+    #-- Roughly the area around
     boundary = {'FUVA': 493, 'FUVB': 557}
     padding = 4
 
