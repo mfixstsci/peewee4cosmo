@@ -443,7 +443,7 @@ def gsagtab_plot_by_date():
     
     #-- Current Time
     now = Time(datetime.datetime.now().isoformat()).mjd
-    
+        
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--segment',
@@ -454,7 +454,7 @@ def gsagtab_plot_by_date():
     #-- For dates, defaults give sagging activity over the past 10 days.
     parser.add_argument('--min_date',
                         type=float,
-                        default=now-10.0,
+                        default=now-14.0,
                         help="Minimum date when gainsag holes appeared")
     
     parser.add_argument('--max_date',
@@ -468,7 +468,7 @@ def gsagtab_plot_by_date():
                         help="Compare to CRDS gsagtab")
 
     args = parser.parse_args()
-
+    
     sagged_pix = list(Flagged_Pixels.select().where(
                                                    (Flagged_Pixels.mjd_below_3.between(args.min_date,args.max_date)) &
                                                    (Flagged_Pixels.segment == args.segment)
@@ -483,7 +483,7 @@ def gsagtab_plot_by_date():
     
     hvlvl_key = {'FUVA':'HVLEVELA',
                  'FUVB':'HVLEVELB'}
-
+    
     for hv in result.keys():
         if hv < 163:
             continue
@@ -539,7 +539,8 @@ def gsagtab_plot_by_date():
             filename='gsag_by_date_compare_{}-{}_{}_{}.png'.format(args.min_date, args.max_date, hv, args.segment)
         else:
             filename='gsag_by_date_{}-{}_{}_{}.png'.format(args.min_date, args.max_date, hv, args.segment)
-        print(filename)
+        
         plt.savefig(os.path.join(settings['monitor_location'], 'CCI', 'gsagtab_comparisons',filename))
         plt.close()
+        print(os.path.join(settings['monitor_location'], 'CCI', 'gsagtab_comparisons',filename))
 #-------------------------------------------------------------------------------

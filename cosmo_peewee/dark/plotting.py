@@ -480,5 +480,100 @@ def plot_orbital_rate(longitude, latitude, darkrate, sun_lon, sun_lat, outname):
                      method='nearest' )
     image = medfilt(thing.T, (5,5))
     '''
+    
+#-------------------------------------------------------------------------------
+
+def plot_spatial(filename):
+
+    hdu = fits.open('/smov/cos/Data/11895/otfrdata/12-01-2014/lb8s2mn9q_corrtag_a.fits.gz')
+    segment = hdu[0].header['segment']
+    #-- Set boundaries based on segment/detector
+    if segment == 'N/A':
+        segment = 'NUV'
+        xlim = (0, 1024)
+        ylim = (0, 1204)
+        pha = (-1, 1)
+    elif segment == 'FUVA':
+        xlim = (1200, 15099)
+        ylim = (380, 680)
+        pha = (2, 23)
+    elif segment == 'FUVB':
+        xlim = (950, 15049)
+        ylim = (440, 720)
+        pha = (2, 23)
+    else:
+        raise ValueError('WHAT SEGMENT IS THIS?! {}'.format(segment))
 
 #-------------------------------------------------------------------------------
+def find_boundaries(img, xtractab, cenwave, aperture, segment):    
+    """
+    Find minimum and maximum y positions to extract spectra.
+
+    Parameters
+    ----------
+    img: array-like
+        2-D array of spectrum you wish to extract.
+    header_dict: dictionary
+        Dictionary of header information.
+    """
+    lref_dir = "/grp/hst/cdbs/lref/"
+    with fits.open(lref_dir+xtractab[5:]) as onedx:
+        wh = np.where((onedx[1].data['CENWAVE'] == cenwave) &
+                      (onedx[1].data['APERTURE'] == aperture) &
+                      (onedx[1].data['SEGMENT'] == segment) )
+        data_1dx = onedx[1].data[wh]
+
+    min_y = data_1dx['B_SPEC'] - (data_1dx['HEIGHT']/2)
+    max_y = data_1dx['B_SPEC'] + (data_1dx['HEIGHT']/2)
+
+    return min_y, max_y
+#-------------------------------------------------------------------------------
+def make_image(xarr, yarr):
+    """
+    This very basically makes a 2D image from a list of coordinates
+    """
+
+    img = np.zeros((1024, 16384))
+    xbin = np.asarray( np.floor((xarr + 0.5)), dtype=np.int)
+    ybin = np.asarray( np.floor((yarr + 0.5)), dtype=np.int)
+    
+    #-- I think RANDCORR pushes some y coordinates outside of the detector, so
+    #-- we won't care about those. They're on the edges anyway...
+    for x, y in zip(xbin, ybin):
+        try:
+            img[y, x] += 1
+            #-- This you'll probably need to bin when you get down to low S/N.
+        except IndexError:
+            #-- print x, y, 'Out of bounds'
+            continue
+
+    return img
+#-------------------------------------------------------------------------------
+def extract_image(img, xtractab, cenwave, aperture, segment):
+    """
+    This sums all the counts in a specific range centered around where the
+    data are (hopefully) with a box size of 35
+    
+    Parameters
+    ----------
+    img: array-like
+        2-D COS FUV Image ([rawx,rawy] or [xcorr,ycorr])
+    xtractab: str
+        COS Extraction Tab
+    cenwave: int
+        COS FUV cenwave
+    aperture: str
+        COS aperture (BOA/PSA)
+    segment: str
+        FUVA or FUVB
+
+    Returns
+    -------
+    collapsed_spec: array-like
+        1-D spectrum
+    """
+
+    min_y, max_y = find_boundaries(img, xtractab, cenwave, aperture, segment)
+    collapsed_spec = np.sum(img[int(min_y):int(max_y), :], axis = 0)
+
+    return collapsed_spec

@@ -623,7 +623,6 @@ def find_flagged():
 #-------------------------------------------------------------------------------
 
 def ingest_all():
-   
     """Create tables and run all ingestion scripts
     
     Parameters
@@ -724,6 +723,7 @@ def ingest_all():
     #-- Populate flagged pixels table.
     logger.info("POPULATING FLAGGED PIXEL TABLE")
     find_flagged()
+    
 #-------------------------------------------------------------------------------
 
 def run_monitors():
@@ -742,9 +742,9 @@ def run_monitors():
     settings = get_settings()
     setup_logging()
     
-    # osm_monitor()
+    osm_monitor()
     dark_monitor()
-    # stim_monitor()
-    # cci_main(os.path.join(settings['monitor_location'], 'CCI'), hotspot_filter=True)
+    stim_monitor()
+    cci_main(os.path.join(settings['monitor_location'], 'CCI'), hotspot_filter=True)
 
 #-------------------------------------------------------------------------------

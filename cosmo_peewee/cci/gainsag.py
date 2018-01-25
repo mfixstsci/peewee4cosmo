@@ -62,7 +62,8 @@ def main(out_dir, hotspot_filter=True):
     ----------
     out_dir: str
         Strings where you would like to write files to
-    
+    hotspot_filter: bool
+        Bool to filter gsagtab or not
     Returns
     -------
     None
@@ -76,6 +77,8 @@ def main(out_dir, hotspot_filter=True):
     hotspot_plotter_interactive('FUVA')
     hotspot_plotter_interactive('FUVB')
     
+    make_gsagtab_db(out_dir, by_date=True)
+
     logger.info("MAKING NEW GSAGTAB")
     reg_gsagtab = make_gsagtab_db(out_dir, filter=hotspot_filter)
     blu_gsagtab = make_gsagtab_db(out_dir, blue=True)
@@ -88,8 +91,10 @@ def main(out_dir, hotspot_filter=True):
     
     pool = mp.Pool(processes=settings['num_cpu'])
     pool.map(partial, range(150,179))
-
+    logger.info("DONE WITH COMBINED GAINMAPS")
+    
     #-- HV Level doest matter when total=True.    
+    logger.info("MAKING TOTAL GAINMAP")
     make_all_gainmaps(100, gainmap_dir=os.path.join(settings['monitor_location'],'CCI'), start_mjd=55055, end_mjd=70000, total=True)
     
     # logger.info("MAKING GAINMAP + GSAG OVERPLOT")
@@ -109,12 +114,13 @@ def main(out_dir, hotspot_filter=True):
                                     compare=True, 
                                     potential_gsagtab=new_gsagtab,
                                     current_gsagtab=calcos_tab)
-        
+
         pool.map(partial, [163,167,169,171,173,175,178])
         
         #-- Just make overplots without comparing.
         partial = functools.partial(gsagtab_overplot_comparison,
                                     potential_gsagtab=new_gsagtab)
+
         pool.map(partial, [163,167,169,171,173,175,178])
 
     logger.info("FINISH MONITOR")
@@ -244,7 +250,7 @@ def in_boundary(segment, ly, dy):
 
 #------------------------------------------------------------
 
-def make_gsagtab_db(out_dir, blue=False, filter=False):
+def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=57322.0):
     """Creates GSAGTAB from Flagged_Pixel DB table.
 
     Parameters
@@ -255,7 +261,11 @@ def make_gsagtab_db(out_dir, blue=False, filter=False):
         If true make bluemode maps
     filter: bool
         If filter, check pixels for temporary sagging
-   
+    by_date: bool
+        Bool to make gainsagtab up to specific date.
+    tab_date: float
+        Specific date for GSAGTAB to be created to. 
+    
     Returns
     -------
     None
@@ -270,6 +280,8 @@ def make_gsagtab_db(out_dir, blue=False, filter=False):
         check_pixel_recovery('FUVA')
         check_pixel_recovery('FUVB')
         filename = 'gsag_filter_%s.fits'%(TIMESTAMP)
+    elif by_date:
+        filename = 'gsag_smov_to_{}.fits'.format(tab_date)
     else:
         filename = 'gsag_%s.fits'%(TIMESTAMP)
     
@@ -342,6 +354,13 @@ def make_gsagtab_db(out_dir, blue=False, filter=False):
                                                                             (Flagged_Pixels.segment == segment) &
                                                                             (Flagged_Pixels.hv_lvl >= hv_level) &
                                                                             (Flagged_Pixels.recovery == False)
+                                                                            ).dicts())
+            elif by_date:
+                #-- Get all of the sagged pixels for a specific Segment/HV Level combo.
+                flagged_pix = list(Flagged_Pixels.select().distinct().where(
+                                                                            (Flagged_Pixels.segment == segment) &
+                                                                            (Flagged_Pixels.hv_lvl >= hv_level) &
+                                                                            (Flagged_Pixels.mjd_below_3 <= tab_date)
                                                                             ).dicts())
             else:
                 flagged_pix = list(Flagged_Pixels.select().distinct().where(

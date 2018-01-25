@@ -485,7 +485,6 @@ def make_total_gainmap(hv_lvl, gainmap_dir=None, segment='FUVB', start_mjd=55055
     #-- Get all of the data and sort.
     all_datasets = [item for item in glob.glob(os.path.join(gainmap_dir, search_string))]
     all_datasets.sort()
-    
     #-- Switch the order to reverse to see what the detector originally looked like.
     if reverse:
         all_datasets = all_datasets[::-1]
