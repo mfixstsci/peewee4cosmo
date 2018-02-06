@@ -30,7 +30,7 @@ import time
 from datetime import datetime
 import glob
 import sys
-from sqlalchemy.engine import create_engine
+import shutil
 import logging
 logger = logging.getLogger(__name__)
 
@@ -47,13 +47,13 @@ from .constants import *
 
 from ..database.models import get_database, get_settings, Files
 from ..database.models import Flagged_Pixels, Gain
-from .gainmap import make_all_gainmaps
+from .gainmap import make_all_gainmaps, make_webpage_plots
 from .gainmap_sagged_pixel_overplotter import make_overplot, hotspot_plotter_interactive, gsagtab_overplot_comparison
 
 import collections
 import functools
 import multiprocessing as mp
-#------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 def main(out_dir, hotspot_filter=True):
     """Main driver for monitoring program.
@@ -70,7 +70,6 @@ def main(out_dir, hotspot_filter=True):
     """
     
     settings = get_settings()
-
     logger.info("STARTING MONITOR")
     
     logger.info("MAKING HOTSPOT PLOTS")
@@ -90,8 +89,23 @@ def main(out_dir, hotspot_filter=True):
                                 gainmap_dir=os.path.join(settings['monitor_location'],'CCI'))
     
     pool = mp.Pool(processes=settings['num_cpu'])
-    pool.map(partial, range(150,179))
+    pool.map(partial, range(142,179))
     logger.info("DONE WITH COMBINED GAINMAPS")
+    
+    logger.info("MAKING/MOVING WEBPAGE FIGURES")
+    all_gainmaps = glob.glob(os.path.join(settings['monitor_location'], 'CCI', 'total_gain_???.fits'))
+    pool.map(make_webpage_plots, all_gainmaps)
+
+    #-- Move to webpage
+    webpage_figures = glob.glob(os.path.join(settings['monitor_location'], 'CCI', 'cumulative_gainmap_FUV?_*.png'))
+    for figure in webpage_figures:
+        #-- Set up destination path
+        dst_path = os.path.join(settings['webpage_location'], 'cci', os.path.basename(figure))
+        #-- If it exists, delete then replace and reset permissions.
+        if os.path.exists(dst_path):
+            os.remove(dst_path)
+            shutil.copyfile(figure, dst_path)
+            os.chmod(dst_path, 0o766)
     
     #-- HV Level doest matter when total=True.    
     logger.info("MAKING TOTAL GAINMAP")
@@ -105,9 +119,8 @@ def main(out_dir, hotspot_filter=True):
     current_blue_tab = os.path.join(settings['lref'], 'zbn1927fl_gsag.fits')
     
     cdbs_gsagtabs = [current_gsag_tab, current_blue_tab]
-    #-- Create comparison figures for HV 163-175
-    pool = mp.Pool(processes=settings['num_cpu'])
     
+    #-- Create comparison figures for HV 163-175    
     for new_gsagtab, calcos_tab in zip(gsagtabs, cdbs_gsagtabs):
         #-- Set up partials for multiprocessing.
         partial = functools.partial(gsagtab_overplot_comparison,
@@ -125,7 +138,7 @@ def main(out_dir, hotspot_filter=True):
 
     logger.info("FINISH MONITOR")
 
-#------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 def gsagtab_extension(date, lx, dx, ly, dy, dq, dethv, hv_string, segment):
     """Creates a properly formatted gsagtab table from input columns.
@@ -182,7 +195,7 @@ def gsagtab_extension(date, lx, dx, ly, dy, dq, dethv, hv_string, segment):
 
     return tab
 
-#------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 def date_string(date_time):
     """Takes a datetime object and returns
@@ -213,7 +226,7 @@ def date_string(date_time):
     date_string = day + '/' + month + '/' + year
     
     return date_string
-#------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 def in_boundary(segment, ly, dy):
     """
@@ -234,7 +247,7 @@ def in_boundary(segment, ly, dy):
     True or False
     """
 
-    #-- Roughly the area around
+    #-- Boundary between LP1 and LP2
     boundary = {'FUVA': 493, 'FUVB': 557}
     padding = 4
 
@@ -248,7 +261,7 @@ def in_boundary(segment, ly, dy):
 
     return False
 
-#------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=57322.0):
     """Creates GSAGTAB from Flagged_Pixel DB table.
@@ -420,11 +433,11 @@ def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=5
         hdu_out[0].header['DESCRIP'] = descrip_string
 
     database.close()
-    hdu_out.writeto(out_fits, clobber=True)
+    hdu_out.writeto(out_fits, overwrite=True)
     logger.info('WROTE: GSAGTAB to %s'%(out_fits))
     return out_fits
 
-#------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 def check_pixel_recovery(segment):
     """Check pixels for actual sagging. Sometimes

@@ -564,7 +564,7 @@ def make_all_gainmaps(hv_lvl, gainmap_dir=None, start_mjd=55055, end_mjd=70000, 
         hdu_out[3].header['EXTNAME'] = 'FUVALAST'
         hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', gainmap_dir, 'FUVB', start_mjd, end_mjd)))
         hdu_out[4].header['EXTNAME'] = 'FUVBLAST'
-        hdu_out.writeto(filename, clobber=True)
+        hdu_out.writeto(filename, overwrite=True)
         hdu_out.close()
     else:
         filename = os.path.join(gainmap_dir,'total_gain_{}.fits'.format(hv_lvl))
@@ -592,11 +592,64 @@ def make_all_gainmaps(hv_lvl, gainmap_dir=None, start_mjd=55055, end_mjd=70000, 
         hdu_out[3].header['EXTNAME'] = 'FUVALAST'
         hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, gainmap_dir, 'FUVB', start_mjd, end_mjd)))
         hdu_out[4].header['EXTNAME'] = 'FUVBLAST'
-        hdu_out.writeto(filename, clobber=True)
+        hdu_out.writeto(filename, overwrite=True)
         hdu_out.close()
 
 #-------------------------------------------------------------------------------
+def make_webpage_plots(total_gainmap):
+    """
+    Make cumulative gainmap png for all segment HV combos for monitoring webpage
 
+    Parameters
+    ----------
+    total_gainmap : str
+        Path to total gainmap
+    
+    Returns
+    -------
+    None
+    """
+    
+    settings = get_settings()
+    
+    #-- Open gainmap
+    gainmap = fits.open(total_gainmap)
+    hv_lvl = gainmap[0].header['HVLEVEL']
+    
+    #-- set up plotting
+    axes_font = 18
+    title_font = 15
+
+    #-- Plot the latest status of the detector for each HV setting.
+    for ext in ['FUVALAST', 'FUVBLAST']:   
+        plt.figure(figsize=(25,10))
+        plt.rc('xtick', labelsize=20) 
+        plt.rc('ytick', labelsize=20)
+        plt.rc('axes', lw=2)
+
+        plt.imshow(gainmap[ext].data, aspect='auto', cmap='gist_gray')
+        
+        if ext == 'FUVALAST':
+            segment = 'FUVA'
+            plt.xlim([400, 15500])
+            plt.ylim([280 ,780])
+            
+        elif ext == 'FUVBLAST':
+            segment = 'FUVB'
+            plt.xlim([400, 15400])
+            plt.ylim([300, 800])
+
+        plt.colorbar()
+
+        plt.title('Cumulative Gainmap | Segment {} | HV {}'.format(segment, hv_lvl), fontsize=title_font, fontweight='bold')
+        plt.xlabel('X (Pixels)', fontsize=axes_font, fontweight='bold')
+        plt.ylabel('Y (Pixels)', fontsize=axes_font, fontweight='bold')
+
+        filename = 'cumulative_gainmap_{}_{}.png'.format(segment, hv_lvl)
+
+        plt.savefig(os.path.join(settings['monitor_location'], 'CCI', filename))
+        plt.close()
+#-------------------------------------------------------------------------------
 def write_and_pull_gainmap(cci_name, out_dir='None'):
     """Make modal gainmap for cos cumulative image.
     This writes to the gain table in cosmo.

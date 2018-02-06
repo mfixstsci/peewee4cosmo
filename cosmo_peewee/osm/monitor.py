@@ -633,16 +633,16 @@ def make_plots(data, data_acqs, out_dir):
     ax3 = fig.add_subplot(3,1,3)
     ax3.plot( data['date'][G140L_A], data['x_shift'][G140L_A],'y.',label='G140L')
     ax3.plot( data['date'][G140L_B], data['x_shift'][G140L_B],'y.')
+    ax3.set_xlabel('DATE [MJD]', fontsize=20, fontweight='bold')
 
     ax.legend(shadow=True, numpoints=1, loc='upper left')
-    fig.suptitle('FUV SHIFT1[A/B]', fontsize=20, fontweight='bold')
-    ax.set_xlabel('MJD', fontsize=20, fontweight='bold')
+    fig.suptitle('FUV SHIFT_DISP - FPPOS OFFSET [A/B]', fontsize=20, fontweight='bold')
     ax.set_ylabel('SHIFT1[A/B] (pixels)', fontsize=10, fontweight='bold')
 
     for axis,index in zip([ax,ax2,ax3],[G130M,G160M,G140L]):
         #axis.set_ylim(-300,300)
         axis.set_xlim(data['date'].min(),data['date'].max()+50 )
-        axis.set_ylabel('SHIFT1[A/B/C] (pixels)', fontsize=10, fontweight='bold')
+        axis.set_ylabel('SHIFT_DISP - FPPOS OFFSET [A/B]', fontsize=7, fontweight='bold')
         axis.axhline(y=0,color='r')
         axis.axhline(y=285,color='k',lw=3,ls='--',zorder=1,label='Search Range')
         axis.axhline(y=-285,color='k',lw=3,ls='--',zorder=1)
@@ -746,11 +746,11 @@ def make_plots(data, data_acqs, out_dir):
     ax4.xaxis.set_ticklabels(['' for item in ax3.xaxis.get_ticklabels()])
     sigma = data['x_shift'][G230L_A].std()
 
-    ax.set_title('NUV SHIFT1[A/B/C]', fontsize=20, fontweight='bold')
+    ax.set_title('NUV SHIFT_DISP - FPPOS OFFSET [A/B/C]', fontsize=20, fontweight='bold')
     for axis, index in zip([ax, ax2, ax3, ax4], [G185M, G225M, G285M, G230L]):
         #axis.set_ylim(-110, 110)
         axis.set_xlim(data['date'].min(), data['date'].max() + 50)
-        axis.set_ylabel('SHIFT1[A/B/C] (pixels)', fontsize=10, fontweight='bold')
+        axis.set_ylabel('SHIFT_DISP - FPPOS OFFSET [A/B]', fontsize=7, fontweight='bold')
         fit, ydata, parameters, err = fit_data(
             data['date'][index], data['x_shift'][index])
         axis.plot(ydata, fit, 'k-', lw=3, label='%3.5fx' % (parameters[0]))
@@ -779,7 +779,6 @@ def make_plots(data, data_acqs, out_dir):
     ax.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1,numpoints=1, shadow=True)
     ax.set_xlim(data_acqs['date'].min(), data_acqs['date'].max() + 50)
     ax.set_ylabel('MIRRORA', fontsize=15, fontweight='bold')
-    ax.set_xlabel('date', fontsize=20, fontweight='bold')
     #ax.set_ylim(460, 630)
 
     mirrorb = np.where((data_acqs['opt_elem'] == 'MIRRORB')
@@ -792,7 +791,7 @@ def make_plots(data, data_acqs, out_dir):
     ax.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1,numpoints=1, shadow=True)
     ax.set_xlim(data_acqs['date'].min(), data_acqs['date'].max() + 50)
     ax.set_ylabel('MIRRORB', fontsize=15, fontweight='bold')
-    ax.set_xlabel('date', fontsize=20, fontweight='bold')
+    ax.set_xlabel('Date [MJD]', fontsize=20, fontweight='bold')
     #ax.set_ylim(260, 400)
 
     remove_if_there(os.path.join(out_dir, 'NUV_shifts.png'))
