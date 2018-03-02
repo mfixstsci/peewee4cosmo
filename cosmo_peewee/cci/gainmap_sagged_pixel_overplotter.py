@@ -29,6 +29,8 @@ from ..utils import remove_if_there
 
 import datetime
 from astropy.time import Time
+import multiprocessing as mp
+import functools
 #-------------------------------------------------------------------------------
 def make_overplot(gainsag_table, bm_hvlvl_a=167, bm_hvlvl_b=175, blue_modes=False):
     """
@@ -540,7 +542,126 @@ def gsagtab_plot_by_date():
         else:
             filename='gsag_by_date_{}-{}_{}_{}.png'.format(args.min_date, args.max_date, hv, args.segment)
         
-        plt.savefig(os.path.join(settings['monitor_location'], 'CCI', 'gsagtab_comparisons',filename))
+        plt.savefig(os.path.join(settings['monitor_location'], 'CCI', 'gsagtab_comparisons', filename))
         plt.close()
-        print(os.path.join(settings['monitor_location'], 'CCI', 'gsagtab_comparisons',filename))
+        print(os.path.join(settings['monitor_location'], 'CCI', 'gsagtab_comparisons', filename))
+#-------------------------------------------------------------------------------
+def compare_and_plot_gsagtable_data(ext, gsagtab_old=None, gsagtab_new=None, outdir=None):
+    """
+    Compare data from two gain sag tables and plot differences.
+
+    Parameters
+    ----------
+    gsagtab_old: str
+        Path to gainsag table with eariler date
+    gsagtab_new: str
+        Path to gainsag table that has date > gsagtab_old
+    """
+
+    # settings = get_settings()
+
+    segment_key = {'FUVA':'FUVALAST',
+                   'FUVB':'FUVBLAST'}
+    
+    hv_lvl_key = {'FUVA':'HVLEVELA',
+                  'FUVB':'HVLEVELB'}
+
+    hdu_old = fits.open(gsagtab_old)
+    hdu_new = fits.open(gsagtab_new)
+
+    
+    segment = hdu_new[ext].header['segment']
+    hv_lvl = hdu_new[ext].header[hv_lvl_key[segment]]
+    
+    if hv_lvl not in [163,167,169,171,173,175,178]:
+        return
+    
+    if segment == 'FUVA':
+        xlim = [400, 15500]
+        ylim = [200 , 800]
+    else:
+        xlim = [400, 15400]
+        ylim = [350, 800]
+    
+    #-- Set some plotting peramimeters.
+    plt.rc('xtick', labelsize=20) 
+    plt.rc('ytick', labelsize=20)
+    plt.rc('axes', lw=2)
+
+    f, (ax1, ax2) = plt.subplots(2, figsize=(25,15))
+    
+    #-- Find coordinates that aren't in 
+    new_coords = [(x,y) for x,y in zip(hdu_new[ext].data['LX'], hdu_new[ext].data['LY'])]
+    old_coords = [(x,y) for x,y in zip(hdu_old[ext].data['LX'], hdu_old[ext].data['LY'])]
+    
+    gainmap = fits.open(os.path.join('/grp/hst/cos/Monitors/', 'CCI','total_gain_{}.fits'.format(hv_lvl)))
+    
+    ax1.imshow(gainmap[segment_key[segment]].data, aspect='auto', cmap='gist_gray')
+    ax1.scatter(hdu_new[ext].data['LX'], hdu_new[ext].data['LY'], marker='+', c='r', label=os.path.basename(gsagtab_new))
+    ax1.scatter(hdu_old[ext].data['LX'], hdu_old[ext].data['LY'], marker='x', c='g', label=os.path.basename(gsagtab_old))
+    ax1.set_xlim(xlim)
+    ax1.set_ylim(ylim)
+    ax1.set_xlabel('X (Pixels)', fontsize=18, fontweight='bold')
+    ax1.set_ylabel('Y (Pixels)', fontsize=18, fontweight='bold')
+    ax1.set_title('SEGMENT: {} | HVLEVEL: {}'.format(segment, hv_lvl), fontsize=20, fontweight='bold')
+    ax1.legend(fontsize=13)
+    
+    ax2.imshow(gainmap[segment_key[segment]].data, aspect='auto', cmap='gist_gray')
+    
+    residuals = list(set(new_coords) - set(old_coords))
+    if residuals:
+        diff_x, diff_y = zip(*residuals)
+        print(segment, hv_lvl, zip([x/8 for x in diff_x], [y/2 for y in diff_y]))
+        ax2.scatter(diff_x, diff_y, marker='+', c='m', label='Difference')
+        ax2.legend(fontsize=13)
+
+    ax2.set_xlim(xlim)
+    ax2.set_ylim(ylim)
+    ax2.set_xlabel('X (Pixels)', fontsize=18, fontweight='bold')
+    ax2.set_ylabel('Y (Pixels)', fontsize=18, fontweight='bold')
+    ax2.set_title('SEGMENT: {} | HVLEVEL: {}'.format(segment, hv_lvl), fontsize=20, fontweight='bold')
+            
+
+    filename = 'gsagtab_residual_comparion_{}_{}.png'.format(segment, hv_lvl)
+    plt.savefig(os.path.join(outdir, filename))
+    plt.close()
+#-------------------------------------------------------------------------------
+def compare_and_plot_gsagtable_data_entry():
+    """
+    Entry Point for plots comparing two gainsag tables.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    
+    settings = get_settings()
+    pool = mp.Pool(processes=settings['num_cpu'])
+
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('--old_gsagtab',
+                        type=str,
+                        help="Path to gsagtab")
+    
+    parser.add_argument('--new_gsagtab',
+                        type=str,
+                        help="Path to gsagtab")
+    
+    parser.add_argument('--out_dir',
+                        type=str,
+                        help="Path you want to write plot out to.")
+    
+    args = parser.parse_args()
+
+    partial = functools.partial(compare_and_plot_gsagtable_data,
+                                gsagtab_old=args.old_gsagtab, 
+                                gsagtab_new=args.new_gsagtab, 
+                                outdir=args.out_dir)
+
+    pool.map(partial, range(1,78))
 #-------------------------------------------------------------------------------

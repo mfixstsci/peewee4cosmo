@@ -102,7 +102,8 @@ def pull_flashes(filename):
                     'opt_elem': hdu[0].header['OPT_ELEM'],
                     'cenwave': hdu[0].header['CENWAVE'],
                     'fppos': hdu[0].header.get('FPPOS', None),
-                    'filetype': hdu[0].header.get('FILETYPE', None)}
+                    'filetype': hdu[0].header.get('FILETYPE', None),
+                    'life_adj': hdu[0].header.get('LIFE_ADJ')}
 
         #-- Get time, and then convert the format
         t = Time(out_info['date'], format='mjd')
@@ -307,10 +308,6 @@ def make_panel(data, grating, height, width, detector, plt_color, top=False, x_r
     taptool = panel.select(type=TapTool)
     taptool.callback = OpenURL(url=url)
     
-    if not acqs:
-        #-- Draw a line @ 0.
-        panel.line(data['date'][grating], np.zeros_like(data['date'][grating]), color='red', line_width=2)
-    
     return panel
 #-------------------------------------------------------------------------------
 
@@ -328,9 +325,9 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
     detector : str
         FUV or NUV mode to make correct plot.
     """
-
+    
     logger.info("MAKING INTERACTIVE PLOT FOR {}".format(detector))
-
+    settings = get_settings()
     #-- Sort by time
     sorted_index = np.argsort(data['date'])
     
@@ -417,6 +414,19 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         unique_G225M = np.where((unique_data['opt_elem'] == 'G225M'))[0]
         unique_G285M = np.where((unique_data['opt_elem'] == 'G285M'))[0]
         unique_G185M = np.where((unique_data['opt_elem'] == 'G185M'))[0]
+
+        unique_G230L_A = np.where((unique_data['opt_elem'] == 'G230L') &
+                                  (unique_data['segment'] == 'NUVA'))[0]
+        unique_G230L_B = np.where((unique_data['opt_elem'] == 'G230L') &
+                                  (unique_data['segment'] == 'NUVB'))[0]
+        unique_G230L_C = np.where((unique_data['opt_elem'] == 'G230L') &
+                                  (unique_data['segment'] == 'NUVC'))[0]
+
+
+        unique_G225M = np.where((unique_data['opt_elem'] == 'G225M'))[0]
+        unique_G285M = np.where((unique_data['opt_elem'] == 'G285M'))[0]
+        unique_G185M = np.where((unique_data['opt_elem'] == 'G185M'))[0]
+
         unique_NUV = np.where((unique_data['opt_elem'] == 'G230L') |
                     (unique_data['opt_elem'] == 'G185M') |
                     (unique_data['opt_elem'] == 'G225M') |
@@ -426,6 +436,13 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         unique_mirrorb = np.where((unique_acqs['opt_elem'] == 'MIRRORB')
                         & (unique_acqs['x_shift'] > 0))[0]
         
+        wcptab_path = os.path.join(settings['lref'], '03p1706jl_wcp.fits')
+        wcptab = fits.getdata(wcptab_path)
+        wcptab_data = [row for row in wcptab]
+        names = ['OPT_ELEM', 'XC_RANGE', 'RESWIDTH', 'MAX_TIME_DIFF', 'STEPSIZE', 
+                 'XD_RANGE', 'BOX', 'SEARCH_OFFSET']
+        wcptab_table = Table(rows=wcptab_data, names=names)
+
         #-- Bokeh
         TOOLS ='box_zoom,pan,reset,hover,tap'
 
@@ -454,16 +471,29 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         before_data = np.where(data['date'][G185M] <= transition_date)
         after_data = np.where(data['date'][G185M] >= transition_date)
         
+        wcptab_row = np.where(wcptab_table['OPT_ELEM']=='G185M')
+        xc_range = wcptab_table[wcptab_row]['XC_RANGE']
+        srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
+
         #-- First transitions
         s1.line(data['date'][G185M][before_data], np.zeros_like(data['date'][G185M][before_data]) + 58, color='black', line_width=2, line_dash='dashed')
         s1.line(data['date'][G185M][before_data], np.zeros_like(data['date'][G185M][before_data]) - 58, color='black', line_width=2, line_dash='dashed')
 
         #-- Second
-        s1.line(data['date'][G185M][after_data], np.zeros_like(data['date'][G185M][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
-        s1.line(data['date'][G185M][after_data], np.zeros_like(data['date'][G185M][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
+        s1.line(data['date'][G185M][after_data], np.zeros_like(data['date'][G185M][after_data]) + (xc_range + srh_offset), color='black', line_width=2, line_dash='dashed')
+        s1.line(data['date'][G185M][after_data], np.zeros_like(data['date'][G185M][after_data]) + ((xc_range *-1) + srh_offset), color='black', line_width=2, line_dash='dashed')
+        
+        s1.line(data['date'][G185M][before_data], np.zeros_like(data['date'][G185M][before_data]), color='red', line_width=2)
+        s1.line(data['date'][G185M][after_data], np.zeros_like(data['date'][G185M][after_data]) + srh_offset, color='red', line_width=2)
+        
         ############################
 
         #-- Panel 2
+
+        wcptab_row = np.where(wcptab_table['OPT_ELEM']=='G225M')
+        xc_range = wcptab_table[wcptab_row]['XC_RANGE']
+        srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
+
         s2 = make_panel(unique_data, unique_G225M, plt_hgt, plt_wth, 'NUV', 'red', x_range=s1.x_range)
 
         fit,ydata,parameters,err = fit_data(data['date'][G225M],data['x_shift'][G225M])
@@ -474,11 +504,18 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         s2.line(data['date'][G225M][before_data], np.zeros_like(data['date'][G225M][before_data]) + 58, color='black', line_width=2, line_dash='dashed')
         s2.line(data['date'][G225M][before_data], np.zeros_like(data['date'][G225M][before_data]) - 58, color='black', line_width=2, line_dash='dashed')
 
-        s2.line(data['date'][G225M][after_data], np.zeros_like(data['date'][G225M][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
-        s2.line(data['date'][G225M][after_data], np.zeros_like(data['date'][G225M][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
+        s2.line(data['date'][G225M][after_data], np.zeros_like(data['date'][G225M][after_data]) + (xc_range + srh_offset), color='black', line_width=2, line_dash='dashed')
+        s2.line(data['date'][G225M][after_data], np.zeros_like(data['date'][G225M][after_data]) + ((xc_range *-1) + srh_offset), color='black', line_width=2, line_dash='dashed')
+        
+        s2.line(data['date'][G225M][before_data], np.zeros_like(data['date'][G225M][before_data]), color='red', line_width=2)
+        s2.line(data['date'][G225M][after_data], np.zeros_like(data['date'][G225M][after_data]) + srh_offset, color='red', line_width=2)
         ############################
 
         #-- Panel 3
+        wcptab_row = np.where(wcptab_table['OPT_ELEM']=='G285M')
+        xc_range = wcptab_table[wcptab_row]['XC_RANGE']
+        srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
+        
         s3 = make_panel(unique_data, unique_G285M, plt_hgt, plt_wth, 'NUV', 'yellow', x_range=s1.x_range)
         
         fit,ydata,parameters,err = fit_data(data['date'][G285M],data['x_shift'][G285M])
@@ -489,11 +526,18 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         s3.line(data['date'][G285M][before_data], np.zeros_like(data['date'][G285M][before_data]) + 58, color='black', line_width=2, line_dash='dashed')
         s3.line(data['date'][G285M][before_data], np.zeros_like(data['date'][G285M][before_data]) - 58, color='black', line_width=2, line_dash='dashed')
 
-        s3.line(data['date'][G285M][after_data], np.zeros_like(data['date'][G285M][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
-        s3.line(data['date'][G285M][after_data], np.zeros_like(data['date'][G285M][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
+        s3.line(data['date'][G285M][after_data], np.zeros_like(data['date'][G285M][after_data]) + (xc_range + srh_offset), color='black', line_width=2, line_dash='dashed')
+        s3.line(data['date'][G285M][after_data], np.zeros_like(data['date'][G285M][after_data]) + ((xc_range *-1) + srh_offset), color='black', line_width=2, line_dash='dashed')
+        
+        s3.line(data['date'][G285M][before_data], np.zeros_like(data['date'][G285M][before_data]), color='red', line_width=2)
+        s3.line(data['date'][G285M][after_data], np.zeros_like(data['date'][G285M][after_data]) + srh_offset, color='red', line_width=2)
         ############################
         
         #-- Panel 4
+        wcptab_row = np.where(wcptab_table['OPT_ELEM']=='G230L')
+        xc_range = wcptab_table[wcptab_row]['XC_RANGE']
+        srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
+
         s4 = make_panel(unique_data, unique_G230L, plt_hgt, plt_wth, 'NUV', 'green', x_range=s1.x_range)
 
         fit,ydata,parameters,err = fit_data(data['date'][G230L],data['x_shift'][G230L])
@@ -504,8 +548,11 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         s4.line(data['date'][G230L][before_data], np.zeros_like(data['date'][G230L][before_data]) + 58, color='black', line_width=2, line_dash='dashed')
         s4.line(data['date'][G230L][before_data], np.zeros_like(data['date'][G230L][before_data]) - 58, color='black', line_width=2, line_dash='dashed')
 
-        s4.line(data['date'][G230L][after_data], np.zeros_like(data['date'][G230L][after_data]) + 90, color='black', line_width=2, line_dash='dashed')
-        s4.line(data['date'][G230L][after_data], np.zeros_like(data['date'][G230L][after_data]) - 90, color='black', line_width=2, line_dash='dashed')
+        s4.line(data['date'][G230L][after_data], np.zeros_like(data['date'][G230L][after_data]) + (xc_range + srh_offset), color='black', line_width=2, line_dash='dashed')
+        s4.line(data['date'][G230L][after_data], np.zeros_like(data['date'][G230L][after_data]) + ((xc_range *-1) + srh_offset), color='black', line_width=2, line_dash='dashed')
+        
+        s4.line(data['date'][G230L][before_data], np.zeros_like(data['date'][G230L][before_data]), color='red', line_width=2)
+        s4.line(data['date'][G230L][after_data], np.zeros_like(data['date'][G230L][after_data]) + srh_offset, color='red', line_width=2)
         ############################
         
         #-- Panel 5
@@ -550,6 +597,8 @@ def make_plots(data, data_acqs, out_dir):
     """
     
     logger.info("MAKING STATIC PLOTS")
+
+    settings = get_settings()
 
     mpl.rcParams['figure.subplot.hspace'] = 0.05
     
@@ -616,38 +665,57 @@ def make_plots(data, data_acqs, out_dir):
                    (data['opt_elem'] == 'G225M') |
                    (data['opt_elem'] == 'G285M'))[0]
 
-    #############
+    ###########################################################################
+    #-- Set plotting params.
 
-    fig = plt.figure( figsize=(16,8) )
+    fig = plt.figure(figsize=(16,8))
     ax = fig.add_subplot(3,1,1)
 
-    ax.plot( data['date'][G130M_A], data['x_shift'][G130M_A],'b.',label='G130M')
-    ax.plot( data['date'][G130M_B], data['x_shift'][G130M_B],'b.')
-    ax.xaxis.set_ticklabels( ['' for item in ax.xaxis.get_ticklabels()] )
+    ###########################################################################
+    #-- Begin plotting FUV
+    
+    ax.plot(data['date'][G130M_A], data['x_shift'][G130M_A],'b+',label='G130M FUVA')
+    ax.plot(data['date'][G130M_B], data['x_shift'][G130M_B],'rx',label='G130M FUVB')
+    ax.xaxis.set_ticklabels( ['' for item in ax.xaxis.get_ticklabels()])
 
     ax2 = fig.add_subplot(3,1,2)
-    ax2.plot( data['date'][G160M_A], data['x_shift'][G160M_A],'g.',label='G160M')
-    ax2.plot( data['date'][G160M_B], data['x_shift'][G160M_B],'g.')
-    ax2.xaxis.set_ticklabels( ['' for item in ax2.xaxis.get_ticklabels()] )
+    ax2.plot(data['date'][G160M_A], data['x_shift'][G160M_A],'b+',label='G160M FUVA')
+    ax2.plot(data['date'][G160M_B], data['x_shift'][G160M_B],'rx',label='G160M FUVB')
+    ax2.xaxis.set_ticklabels( ['' for item in ax2.xaxis.get_ticklabels()])
 
     ax3 = fig.add_subplot(3,1,3)
-    ax3.plot( data['date'][G140L_A], data['x_shift'][G140L_A],'y.',label='G140L')
-    ax3.plot( data['date'][G140L_B], data['x_shift'][G140L_B],'y.')
+    ax3.plot(data['date'][G140L_A], data['x_shift'][G140L_A],'b+',label='G140L FUVA')
+    ax3.plot(data['date'][G140L_B], data['x_shift'][G140L_B],'rx',label='G140L FUVB')
     ax3.set_xlabel('DATE [MJD]', fontsize=20, fontweight='bold')
 
     ax.legend(shadow=True, numpoints=1, loc='upper left')
-    fig.suptitle('FUV SHIFT_DISP - FPPOS OFFSET [A/B]', fontsize=20, fontweight='bold')
+    fig.suptitle('FUV[A/B] SHIFT1', fontsize=20, fontweight='bold')
     ax.set_ylabel('SHIFT1[A/B] (pixels)', fontsize=10, fontweight='bold')
 
-    for axis,index in zip([ax,ax2,ax3],[G130M,G160M,G140L]):
+    #-- Change wcptab to fuv_wcptab in future to avoid var name conflict
+    #-- with NUV.
+    wcptab = fits.getdata(os.path.join(settings['lref'], '14o20140l_wcp.fits'))
+    wcptab_data = [row for row in wcptab]
+    names = ['OPT_ELEM', 'XC_RANGE', 'RESWIDTH', 'MAX_TIME_DIFF', 'STEPSIZE', 
+             'XD_RANGE', 'BOX', 'SEARCH_OFFSET']
+    wcptab_table = Table(rows=wcptab_data, names=names)
+
+    for axis,index,grat in zip([ax,ax2,ax3],[G130M,G160M,G140L],['G130M','G160M','G140L']):
         #axis.set_ylim(-300,300)
         axis.set_xlim(data['date'].min(),data['date'].max()+50 )
-        axis.set_ylabel('SHIFT_DISP - FPPOS OFFSET [A/B]', fontsize=7, fontweight='bold')
+        axis.set_ylabel('SHIFT1 [A/B]', fontsize=15, fontweight='bold')
+        
+        wcptab_row = np.where(wcptab_table['OPT_ELEM']==grat)
+        xc_range = wcptab_table[wcptab_row]['XC_RANGE']
+        # srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
+        srh_offset = 0
+        axis.axhline(y=srh_offset,color='r')
         axis.axhline(y=0,color='r')
-        axis.axhline(y=285,color='k',lw=3,ls='--',zorder=1,label='Search Range')
-        axis.axhline(y=-285,color='k',lw=3,ls='--',zorder=1)
+        axis.axhline(y=xc_range + abs(srh_offset),color='k',lw=3,ls='--',zorder=1,label='Search Range')
+        axis.axhline(y=(xc_range*-1) - abs(srh_offset),color='k',lw=3,ls='--',zorder=1)
+        
         fit,ydata,parameters,err = fit_data(data['date'][index],data['x_shift'][index])
-        axis.plot( ydata,fit,'k-',lw=3,label='%3.5fx'%(parameters[0]) )
+        axis.plot(ydata,fit,'k-',lw=3,label='%3.5fx'%(parameters[0]) )
         axis.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1, numpoints=1,shadow=True,prop={'size':10})
 
     remove_if_there(os.path.join(out_dir,'FUV_shifts.png'))
@@ -655,16 +723,27 @@ def make_plots(data, data_acqs, out_dir):
     plt.close(fig)
     os.chmod(os.path.join(out_dir,'FUV_shifts.png'),0o766)
 
-    ##########
+    #-- Make table for current reference file
+    wcptab = fits.getdata(os.path.join(settings['lref'], '03p1706jl_wcp.fits'))
+    wcptab_data = [row for row in wcptab]
+    names = ['OPT_ELEM', 'XC_RANGE', 'RESWIDTH', 'MAX_TIME_DIFF', 'STEPSIZE', 
+             'XD_RANGE', 'BOX', 'SEARCH_OFFSET']
+    wcptab_table = Table(rows=wcptab_data, names=names)
 
+    ###########################################################################
+    #-- Begin Plotting NUV
+    #-- G185M
     fig = plt.figure(figsize=(16, 18))
     ax = fig.add_subplot(7, 1, 1)
-    ax.plot(data['date'][G185M_A].data, data['x_shift'][G185M_A].data, 'bo', label='G185M')
-    ax.plot(data['date'][G185M_B].data, data['x_shift'][G185M_B].data, 'bo', markeredgecolor='k')
-    ax.plot(data['date'][G185M_C].data, data['x_shift'][G185M_C].data, 'bo', markeredgecolor='k')
-    ax.axhline(y=0, color='red')
+    ax.plot(data['date'][G185M_A], data['x_shift'][G185M_A], 'rx', label='G185M NUVA')
+    ax.plot(data['date'][G185M_B], data['x_shift'][G185M_B], 'go', mfc='none', label='G185M NUVB')
+    ax.plot(data['date'][G185M_C], data['x_shift'][G185M_C], 'b+', label='G185M NUVC')
+    
+    #-- The WCPTAB has different search offsets and search ranges over time.
+    #-- We will hardcode the old transitions because keeping track of the reference 
+    #-- files is difficult.
 
-    #--second timeframe
+    #-- First time frame
     transition_fraction = (56500.0 - data['date'].min()) / \
         (data['date'].max() - data['date'].min())
 
@@ -672,85 +751,129 @@ def make_plots(data, data_acqs, out_dir):
                 lw=3, ls='--', zorder=1, label='Search Range')
     ax.axhline(y=-58, xmin=0, xmax=transition_fraction,
                 color='k', lw=3, ls='--', zorder=1)
-
-    ax.axhline(y=90, xmin=transition_fraction, xmax=1,
+    ax.axhline(y=0, xmin=0, xmax=transition_fraction,
+                color='red')
+    
+    #-- Second time frame
+    wcptab_row = np.where(wcptab_table['OPT_ELEM']=='G185M')
+    xc_range = wcptab_table[wcptab_row]['XC_RANGE']
+    srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
+    
+    ax.axhline(y=xc_range + abs(srh_offset), xmin=transition_fraction, xmax=1,
                 color='k', lw=3, ls='--', zorder=1)
-    ax.axhline(y=-90, xmin=transition_fraction,
+    ax.axhline(y=(xc_range*-1) - abs(srh_offset), xmin=transition_fraction,
                 xmax=1, color='k', lw=3, ls='--', zorder=1)
-    #--
+    ax.axhline(y=srh_offset, xmin=transition_fraction, xmax=1,
+                color='red')
 
     sigma = data['x_shift'][G185M_A].std()
 
     ax.xaxis.set_ticklabels(['' for item in ax.xaxis.get_ticklabels()])
-
+    ###########################################################################
+    
+    #-- G225M
     ax2 = fig.add_subplot(7, 1, 2)
-    ax2.plot(data['date'][G225M_A], data['x_shift'][G225M_A], 'ro', label='G225M')
-    ax2.plot(data['date'][G225M_B], data['x_shift'][G225M_B], 'ro', markeredgecolor='k')
-    ax2.plot(data['date'][G225M_C], data['x_shift'][G225M_C], 'ro', markeredgecolor='k')
-    ax2.axhline(y=0, color='red')
+    ax2.plot(data['date'][G225M_A], data['x_shift'][G225M_A], 'rx', label='G225M NUVA')
+    ax2.plot(data['date'][G225M_B], data['x_shift'][G225M_B], 'go', mfc='none', label='G225M NUVB')
+    ax2.plot(data['date'][G225M_C], data['x_shift'][G225M_C], 'b+', label='G225M NUVC')
 
-    #--second timeframe
+    #-- First time frame
     transition_fraction = (56500.0 - data['date'].min()) / \
         (data['date'].max() - data['date'].min())
 
-    ax2.axhline(y=58, xmin=0, xmax=transition_fraction, color='k', lw=3, ls='--', zorder=1, label='Search Range')
-    ax2.axhline(y=-58, xmin=0, xmax=transition_fraction, color='k', lw=3, ls='--', zorder=1)
+    ax2.axhline(y=58, xmin=0, xmax=transition_fraction, color='k', 
+                lw=3, ls='--', zorder=1, label='Search Range')
+    ax2.axhline(y=-58, xmin=0, xmax=transition_fraction, color='k', 
+                lw=3, ls='--', zorder=1)
 
-    ax2.axhline(y=90, xmin=transition_fraction, xmax=1,
+    #-- Second time frame
+    wcptab_row = np.where(wcptab_table['OPT_ELEM']=='G225M')
+    xc_range = wcptab_table[wcptab_row]['XC_RANGE']
+    srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
+    
+    ax2.axhline(y=xc_range + abs(srh_offset), xmin=transition_fraction, xmax=1,
                 color='k', lw=3, ls='--', zorder=1)
-    ax2.axhline(y=-90, xmin=transition_fraction,
+    ax2.axhline(y=(xc_range*-1) - abs(srh_offset), xmin=transition_fraction,
                 xmax=1, color='k', lw=3, ls='--', zorder=1)
-    #--
-
+    ax2.axhline(y=0, xmin=0, xmax=transition_fraction, color='red')
+    ax2.axhline(y=srh_offset, xmin=transition_fraction, xmax=1,
+                color='red')
     sigma = data['x_shift'][G225M_A].std()
 
     ax2.xaxis.set_ticklabels(['' for item in ax2.xaxis.get_ticklabels()])
+    ###########################################################################
 
+    #-- G285M 
     ax3 = fig.add_subplot(7, 1, 3)
-    ax3.plot(data['date'][G285M_A], data['x_shift'][G285M_A], 'yo', label='G285M')
-    ax3.plot(data['date'][G285M_B], data['x_shift']
-             [G285M_B], 'yo', markeredgecolor='k')
-    ax3.plot(data['date'][G285M_C], data['x_shift']
-             [G285M_C], 'yo', markeredgecolor='k')
+    ax3.plot(data['date'][G285M_A], data['x_shift'][G285M_A], 'rx', label='G285M NUVA')
+    ax3.plot(data['date'][G285M_B], data['x_shift'][G285M_B], 'go', mfc='none', label='G285M NUVB')
+    ax3.plot(data['date'][G285M_C], data['x_shift'][G285M_C], 'b+', label='G285M NUVC')
     ax3.axhline(y=0, color='red')
-    ax3.axhline(y=58, color='k', lw=3, ls='--', zorder=1, label='Search Range')
-    ax3.axhline(y=-58, color='k', lw=3, ls='--', zorder=1)
+    
+    #--First time frame
+    transition_fraction = (55535.0 - data['date'].min()) / \
+        (data['date'].max() - data['date'].min())
+
+    ax3.axhline(y=58, xmin=0, xmax=transition_fraction, color='k', 
+                lw=3, ls='--', zorder=1, label='Search Range')
+    ax3.axhline(y=-58, xmin=0, xmax=transition_fraction, color='k', 
+                lw=3, ls='--', zorder=1)
+
+    #-- Second time frame
+    wcptab_row = np.where(wcptab_table['OPT_ELEM']=='G285M')
+    xc_range = wcptab_table[wcptab_row]['XC_RANGE']
+    srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
+    
+    ax3.axhline(y=xc_range + srh_offset, xmin=transition_fraction, xmax=1,
+                color='k', lw=3, ls='--', zorder=1)
+    ax3.axhline(y=(xc_range*-1) + srh_offset, xmin=transition_fraction,
+                xmax=1, color='k', lw=3, ls='--', zorder=1)
+    ax3.axhline(y=0, xmin=0, xmax=transition_fraction, color='red')
+    ax3.axhline(y=srh_offset, xmin=transition_fraction, xmax=1,
+                color='red')
 
     sigma = data['x_shift'][G285M_A].std()
 
     ax3.xaxis.set_ticklabels(['' for item in ax3.xaxis.get_ticklabels()])
+    ###########################################################################
 
+    #-- G230L
     ax4 = fig.add_subplot(7, 1, 4)
-    ax4.plot(data['date'][G230L_A], data['x_shift'][G230L_A], 'go', label='G230L')
-    ax4.plot(data['date'][G230L_B], data['x_shift']
-             [G230L_B], 'go', markeredgecolor='k')
-    ax4.plot(data['date'][G230L_C], data['x_shift']
-             [G230L_C], 'go', markeredgecolor='k')
+    ax4.plot(data['date'][G230L_A], data['x_shift'][G230L_A], 'rx', label='G230L NUVA')
+    ax4.plot(data['date'][G230L_B], data['x_shift'][G230L_B], 'go', mfc='none', label='G230L NUVB')
+    ax4.plot(data['date'][G230L_C], data['x_shift'][G230L_C], 'b+', label='G230L NUVC')
 
-    ax4.axhline(y=0, color='red')
-
-    #--second timeframe
+    #--First time frame
     transition_fraction = (55535.0 - data['date'].min()) / \
         (data['date'].max() - data['date'].min())
 
-    ax4.axhline(y=58, xmin=0, xmax=transition_fraction, color='k',
+    ax4.axhline(y=58, xmin=0, xmax=transition_fraction, color='k', 
                 lw=3, ls='--', zorder=1, label='Search Range')
-    ax4.axhline(y=-58, xmin=0, xmax=transition_fraction,
-                color='k', lw=3, ls='--', zorder=1)
+    ax4.axhline(y=-58, xmin=0, xmax=transition_fraction, color='k', 
+                lw=3, ls='--', zorder=1)
 
-    ax4.axhline(y=90, xmin=transition_fraction, xmax=1,
+    #-- Second time frame
+    wcptab_row = np.where(wcptab_table['OPT_ELEM']=='G230L')
+    xc_range = wcptab_table[wcptab_row]['XC_RANGE']
+    srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
+    
+    ax4.axhline(y=xc_range + srh_offset, xmin=transition_fraction, xmax=1,
                 color='k', lw=3, ls='--', zorder=1)
-    ax4.axhline(y=-90, xmin=transition_fraction,
+    ax4.axhline(y=(xc_range*-1) + srh_offset, xmin=transition_fraction,
                 xmax=1, color='k', lw=3, ls='--', zorder=1)
-    #--
+    ax4.axhline(y=0, xmin=0, xmax=transition_fraction, color='red')
+    ax4.axhline(y=srh_offset, xmin=transition_fraction, xmax=1,
+                color='red')
+
     ax4.xaxis.set_ticklabels(['' for item in ax3.xaxis.get_ticklabels()])
     sigma = data['x_shift'][G230L_A].std()
+    ###########################################################################
 
-    ax.set_title('NUV SHIFT_DISP - FPPOS OFFSET [A/B/C]', fontsize=20, fontweight='bold')
+    ax.set_title('NUV[A/B/C] SHIFT1', fontsize=20, fontweight='bold')
     for axis, index in zip([ax, ax2, ax3, ax4], [G185M, G225M, G285M, G230L]):
         #axis.set_ylim(-110, 110)
         axis.set_xlim(data['date'].min(), data['date'].max() + 50)
-        axis.set_ylabel('SHIFT_DISP - FPPOS OFFSET [A/B]', fontsize=7, fontweight='bold')
+        axis.set_ylabel('SHIFT1 [A/B/C]', fontsize=15, fontweight='bold')
         fit, ydata, parameters, err = fit_data(
             data['date'][index], data['x_shift'][index])
         axis.plot(ydata, fit, 'k-', lw=3, label='%3.5fx' % (parameters[0]))
@@ -779,6 +902,7 @@ def make_plots(data, data_acqs, out_dir):
     ax.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1,numpoints=1, shadow=True)
     ax.set_xlim(data_acqs['date'].min(), data_acqs['date'].max() + 50)
     ax.set_ylabel('MIRRORA', fontsize=15, fontweight='bold')
+    ax.set_xticks([])
     #ax.set_ylim(460, 630)
 
     mirrorb = np.where((data_acqs['opt_elem'] == 'MIRRORB')
@@ -864,42 +988,474 @@ def make_plots(data, data_acqs, out_dir):
         plt.close(fig)
         os.chmod(os.path.join(out_dir, '%s_shifts_color.pdf' %
                     (grating)), 0o766)
-
 #----------------------------------------------------------
+def plot(axrow, detector, cenwave, fuva_data=None, fuvb_data=None, nuva_data=None, nuvb_data=None, nuvc_data=None):
+    all_fppos = ['fp1','fp2','fp3','fp4']
+    
+    if detector == 'FUV':
+    
+        fp_1a = np.where(fuva_data['fppos']==1)
+        fp_2a = np.where(fuva_data['fppos']==2)
+        fp_3a = np.where(fuva_data['fppos']==3)
+        fp_4a = np.where(fuva_data['fppos']==4)
 
-def make_plots_2(data, data_acqs, out_dir):
-    """ Making the plots for the shift2 value
-    """
+        for fp, marker, fp_label in zip([fp_1a, fp_2a, fp_3a, fp_4a], ['*','+','x','v'], all_fppos): 
+            axrow[0].plot(fuva_data['date'][fp], fuva_data['x_shift'][fp],'r{}'.format(marker),label='FUVA | {} | {}'.format(cenwave, fp_label))
+        
+        axrow[0].set_xlabel('Date [MJD]', fontsize=20, fontweight='bold')
+        axrow[0].set_ylabel('SHIFT1A [Pixels]', fontsize=20, fontweight='bold')
+        axrow[0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                        ncol=4, fancybox=True, shadow=True, fontsize=15)
 
+        fp_1b = np.where(fuvb_data['fppos']==1)
+        fp_2b = np.where(fuvb_data['fppos']==2)
+        fp_3b = np.where(fuvb_data['fppos']==3)
+        fp_4b = np.where(fuvb_data['fppos']==4)
+
+        for fp, marker, fp_label in zip([fp_1b, fp_2b, fp_3b, fp_4b], ['*','+','x','v'], all_fppos): 
+            axrow[1].plot(fuva_data['date'][fp], fuva_data['x_shift'][fp],'b{}'.format(marker),label='FUVA | {} | {}'.format(cenwave, fp_label))
+        
+        axrow[1].set_xlabel('Date [MJD]', fontsize=20, fontweight='bold')
+        axrow[1].set_ylabel('SHIFT1A [Pixels]', fontsize=20, fontweight='bold')
+        axrow[1].legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                        ncol=4, fancybox=True, shadow=True, fontsize=15)
+
+    elif detector == 'NUV':
+        fp_1a = np.where(nuva_data['fppos']==1)
+        fp_2a = np.where(nuva_data['fppos']==2)
+        fp_3a = np.where(nuva_data['fppos']==3)
+        fp_4a = np.where(nuva_data['fppos']==4)
+
+        for fp, marker, fp_label in zip([fp_1a, fp_2a, fp_3a, fp_4a], ['*','+','x','v'], all_fppos): 
+            axrow[0].plot(nuva_data['date'][fp], nuva_data['x_shift'][fp],'r{}'.format(marker),label='NUVA | {} | {}'.format(cenwave, fp_label))
+        
+        axrow[0].set_xlabel('Date [MJD]', fontsize=20, fontweight='bold')
+        axrow[0].set_ylabel('SHIFT1A [Pixels]', fontsize=20, fontweight='bold')
+        axrow[0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                        ncol=4, fancybox=True, shadow=True, fontsize=15)
+        
+        fp_1b = np.where(nuvb_data['fppos']==1)
+        fp_2b = np.where(nuvb_data['fppos']==2)
+        fp_3b = np.where(nuvb_data['fppos']==3)
+        fp_4b = np.where(nuvb_data['fppos']==4)
+
+        for fp, marker, fp_label in zip([fp_1b, fp_2b, fp_3b, fp_4b], ['*','+','x','v'], all_fppos): 
+            axrow[1].plot(nuvb_data['date'][fp], nuvb_data['x_shift'][fp],'r{}'.format(marker),label='NUVB | {} | {}'.format(cenwave, fp_label))
+
+        axrow[1].set_xlabel('Date [MJD]', fontsize=20, fontweight='bold')
+        axrow[1].set_ylabel('SHIFT1A [Pixels]', fontsize=20, fontweight='bold')
+        axrow[1].legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                        ncol=4, fancybox=True, shadow=True, fontsize=15)
+        
+        fp_1c = np.where(nuvc_data['fppos']==1)
+        fp_2c = np.where(nuvc_data['fppos']==2)
+        fp_3c = np.where(nuvc_data['fppos']==3)
+        fp_4c = np.where(nuvc_data['fppos']==4)
+        
+        for fp, marker, fp_label in zip([fp_1c, fp_2c, fp_3c, fp_4c], ['*','+','x','v'], all_fppos): 
+            axrow[2].plot(nuvc_data['date'][fp], nuvc_data['x_shift'][fp],'g{}'.format(marker),label='NUVC | {} | {}'.format(cenwave, fp_label))
+
+        axrow[2].set_xlabel('Date [MJD]', fontsize=20, fontweight='bold')
+        axrow[2].set_ylabel('SHIFT1A [Pixels]', fontsize=20, fontweight='bold')
+        axrow[2].legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                        ncol=4, fancybox=True, shadow=True, fontsize=15)
+#----------------------------------------------------------
+def make_plots_per_fppos(data, out_dir):
+ 
     sorted_index = np.argsort(data['date'])
     data = data[sorted_index]
 
-    for cenwave in set(data['cenwave']):
-        cw_index = np.where(data['cenwave'] == cenwave)
-        all_segments = set(data[cw_index]['segment'])
-        n_seg = len(all_segments)
+    plt.rc('font', weight='bold')
+    plt.rc('xtick.major', size=5, pad=7)
+    plt.rc('xtick', labelsize=15)
+    plt.rc('ytick', labelsize=15) 
 
-        fig = plt.figure()
-        fig.suptitle('Shift2 vs Shift1 {}'.format(cenwave), fontsize=20, fontweight='bold')
+    gratings = set(data['opt_elem'])
+        
+    for grating in gratings:
+        index = np.where(data['opt_elem'] == grating)
+        cenwaves = set(data[index]['cenwave'])
+        segments = set(data[index]['segment'])    
+        detector = list(set(data[index]['detector']))[0]
 
-        for i, segment in enumerate(all_segments):
-            index = np.where( (data['segment'] == segment) &
-                              (data['cenwave'] == cenwave) )
+        n_cen = len(cenwaves)
+        n_seg = len(segments)
+        
+        fig, axes = plt.subplots(n_cen, n_seg, figsize=(40,30))
 
-            ax = fig.add_subplot(n_seg, 1, i+1)
-            ax.plot(data[index]['x_shift'], data[index]['y_shift'], 'o')
-            ax.set_xlabel('x_shift', fontsize=20, fontweight='bold')
-            ax.set_ylabel('y_shift', fontsize=15, fontweight='bold')
-            #ax.set_ylabel('SHIFT2 vs SHIFT1 {}'.format(segment))
-            #ax.set_ylim(-20, 20)
-        remove_if_there(os.path.join(out_dir, 'shift_relation_{}.png'.format(cenwave)))
-        fig.savefig(os.path.join(out_dir, 'shift_relation_{}.png'.format(cenwave)))
+        for ax, cenwave in zip(axes, cenwaves):
+            if detector == 'FUV':
+                fuva_data = np.where((data['segment'] == 'FUVA') &
+                                        (data['cenwave'] == cenwave)
+                                    )
+                fuvb_data = np.where((data['segment'] == 'FUVB') &
+                                        (data['cenwave'] == cenwave)
+                                    )
+                plot(ax, detector, cenwave, fuva_data=data[fuva_data], fuvb_data=data[fuvb_data])
+            elif detector == 'NUV':
+                nuva_data = np.where((data['segment'] == 'NUVA') &
+                                        (data['cenwave'] == cenwave)
+                                    )
+                nuvb_data = np.where((data['segment'] == 'NUVB') &
+                                        (data['cenwave'] == cenwave)
+                                    )
+                nuvc_data = np.where((data['segment'] == 'NUVC') &
+                                        (data['cenwave'] == cenwave)
+                                    )
+                plot(ax, detector, cenwave, nuva_data=data[nuva_data], nuvb_data=data[nuvb_data],
+                        nuvc_data=data[nuvc_data])
+
+        plt.tight_layout()
+        filename = 'shifts_{}_{}.png'.format(detector, grating)
+        remove_if_there(os.path.join(out_dir, filename))
+        fig.savefig(os.path.join(out_dir, filename))
         plt.close(fig)
-        os.chmod(os.path.join(out_dir, 'shift_relation_{}.png'.format(cenwave)), 0o766)
-
-
+        os.chmod(os.path.join(out_dir, filename), 0o766)
 #----------------------------------------------------------
+def make_plots_per_cenwave(data, out_dir):
+    sorted_index = np.argsort(data['date'])
+    data = data[sorted_index]
 
+    plt.rc('font', weight='bold')
+    plt.rc('xtick.major', size=5, pad=7)
+    plt.rc('xtick', labelsize=15)
+    plt.rc('ytick', labelsize=15) 
+
+    detectors = set(data['detector'])
+
+    for detector in detectors:
+        det_index = np.where(data['detector'] == detector)[0]
+        cenwaves = set(data['cenwave'][det_index])
+
+        for shift in ['x_shift', 'y_shift']:
+            
+            if shift == 'x_shift':
+                shift_label = 'SHIFT1'
+            else:
+                shift_label = 'SHIFT2'
+
+            for cenwave in cenwaves:
+                if detector == 'FUV':
+                    
+                    f,(ax1,ax2) = plt.subplots(2,1,figsize=(30,15))
+                    f.subplots_adjust(hspace=0.7)
+                    #--LP1
+                    fuva_data_fp1 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 1) &
+                                            (data['life_adj'] ==1))[0]
+                    
+                    fuva_data_fp2 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 2) &
+                                            (data['life_adj'] ==1))[0]
+                    
+                    fuva_data_fp3 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 3) &
+                                            (data['life_adj'] ==1))[0]
+                    
+                    fuva_data_fp4 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 4) &
+                                            (data['life_adj'] ==1))[0]
+                    
+                    fuvb_data_fp1 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 1) &
+                                            (data['life_adj'] ==1))[0]
+
+                    fuvb_data_fp2 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 2) &
+                                            (data['life_adj'] ==1))[0]
+                    
+                    fuvb_data_fp3 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 3) &
+                                            (data['life_adj'] ==1))[0]
+                    
+                    fuvb_data_fp4 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 4) &
+                                            (data['life_adj'] ==1))[0]
+                    
+                    ax1.plot(data['date'][fuva_data_fp1], data[shift][fuva_data_fp1], 'bo',label = 'FUVA LP1 | {} | FP1'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp2], data[shift][fuva_data_fp2], 'bx',label = 'FUVA LP1 | {} | FP2'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp3], data[shift][fuva_data_fp3], 'bv',label = 'FUVA LP1 | {} | FP3'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp4], data[shift][fuva_data_fp4], 'b*',label = 'FUVA LP1 | {} | FP4'.format(cenwave))
+                    
+                    ax2.plot(data['date'][fuvb_data_fp1], data[shift][fuvb_data_fp1], 'bo',label = 'FUVB LP1 | {} | FP1'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp2], data[shift][fuvb_data_fp2], 'bx',label = 'FUVB LP1 | {} | FP2'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp3], data[shift][fuvb_data_fp3], 'bv',label = 'FUVB LP1 | {} | FP3'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp4], data[shift][fuvb_data_fp4], 'b*',label = 'FUVB LP1 | {} | FP4'.format(cenwave))
+                    
+                    #-- LP2
+                    fuva_data_fp1 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 1) &
+                                            (data['life_adj'] ==2))[0]
+                    
+                    fuva_data_fp2 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 2) &
+                                            (data['life_adj'] ==2))[0]
+                    
+                    fuva_data_fp3 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 3) &
+                                            (data['life_adj'] ==2))[0]
+                    
+                    fuva_data_fp4 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 4) &
+                                            (data['life_adj'] ==2))[0]
+                    
+                    fuvb_data_fp1 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 1) &
+                                            (data['life_adj'] ==2))[0]
+
+                    fuvb_data_fp2 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 2) &
+                                            (data['life_adj'] ==2))[0]
+                    
+                    fuvb_data_fp3 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 3) &
+                                            (data['life_adj'] ==2))[0]
+                    
+                    fuvb_data_fp4 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 4) &
+                                            (data['life_adj'] ==2))[0]
+                    
+                    ax1.plot(data['date'][fuva_data_fp1], data[shift][fuva_data_fp1], 'ro',label = 'FUVA LP2 | {} | FP1'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp2], data[shift][fuva_data_fp2], 'rx',label = 'FUVA LP2 | {} | FP2'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp3], data[shift][fuva_data_fp3], 'rv',label = 'FUVA LP2 | {} | FP3'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp4], data[shift][fuva_data_fp4], 'r*',label = 'FUVA LP2 | {} | FP4'.format(cenwave))
+                    
+                    ax2.plot(data['date'][fuvb_data_fp1], data[shift][fuvb_data_fp1], 'ro',label = 'FUVB LP2 | {} | FP1'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp2], data[shift][fuvb_data_fp2], 'rx',label = 'FUVB LP2 | {} | FP2'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp3], data[shift][fuvb_data_fp3], 'rv',label = 'FUVB LP2 | {} | FP3'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp4], data[shift][fuvb_data_fp4], 'r*',label = 'FUVB LP2 | {} | FP4'.format(cenwave))
+                    
+                    #-- LP3
+                    fuva_data_fp1 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 1) &
+                                            (data['life_adj'] ==3))[0]
+                    
+                    fuva_data_fp2 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 2) &
+                                            (data['life_adj'] ==3))[0]
+                    
+                    fuva_data_fp3 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 3) &
+                                            (data['life_adj'] ==3))[0]
+                    
+                    fuva_data_fp4 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 4) &
+                                            (data['life_adj'] ==3))[0]
+                    
+                    fuvb_data_fp1 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 1) &
+                                            (data['life_adj'] ==3))[0]
+
+                    fuvb_data_fp2 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 2) &
+                                            (data['life_adj'] ==3))[0]
+                    
+                    fuvb_data_fp3 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 3) &
+                                            (data['life_adj'] ==3))[0]
+                    
+                    fuvb_data_fp4 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 4) &
+                                            (data['life_adj'] ==3))[0]
+                    
+                    ax1.plot(data['date'][fuva_data_fp1], data[shift][fuva_data_fp1], 'go',label = 'FUVA LP3 | {} | FP1'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp2], data[shift][fuva_data_fp2], 'gx',label = 'FUVA LP3 | {} | FP2'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp3], data[shift][fuva_data_fp3], 'gv',label = 'FUVA LP3 | {} | FP3'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp4], data[shift][fuva_data_fp4], 'g*',label = 'FUVA LP3 | {} | FP4'.format(cenwave))
+                    
+                    ax2.plot(data['date'][fuvb_data_fp1], data[shift][fuvb_data_fp1], 'go',label = 'FUVB LP3 | {} | FP1'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp2], data[shift][fuvb_data_fp2], 'gx',label = 'FUVB LP3 | {} | FP2'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp3], data[shift][fuvb_data_fp3], 'gv',label = 'FUVB LP3 | {} | FP3'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp4], data[shift][fuvb_data_fp4], 'g*',label = 'FUVB LP3 | {} | FP4'.format(cenwave))
+                    
+                    #-- LP4
+                    fuva_data_fp1 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 1) &
+                                            (data['life_adj'] ==4))[0]
+                    
+                    fuva_data_fp2 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 2) &
+                                            (data['life_adj'] ==4))[0]
+                    
+                    fuva_data_fp3 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 3) &
+                                            (data['life_adj'] ==4))[0]
+                    
+                    fuva_data_fp4 = np.where((data['segment'] == 'FUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 4) &
+                                            (data['life_adj'] ==4))[0]
+                    
+                    fuvb_data_fp1 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 1) &
+                                            (data['life_adj'] ==4))[0]
+
+                    fuvb_data_fp2 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 2) &
+                                            (data['life_adj'] ==4))[0]
+                    
+                    fuvb_data_fp3 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 3) &
+                                            (data['life_adj'] ==4))[0]
+                    
+                    fuvb_data_fp4 = np.where((data['segment'] == 'FUVB') &
+                                            (data['cenwave'] == cenwave) & 
+                                            (data['fppos'] == 4) &
+                                            (data['life_adj'] ==4))[0]
+                    
+                    ax1.plot(data['date'][fuva_data_fp1], data[shift][fuva_data_fp1], 'ko',label = 'FUVA LP4 | {} | FP1'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp2], data[shift][fuva_data_fp2], 'kx',label = 'FUVA LP4 | {} | FP2'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp3], data[shift][fuva_data_fp3], 'kv',label = 'FUVA LP4 | {} | FP3'.format(cenwave))
+                    ax1.plot(data['date'][fuva_data_fp4], data[shift][fuva_data_fp4], 'k*',label = 'FUVA LP4 | {} | FP4'.format(cenwave))
+                    
+                    ax2.plot(data['date'][fuvb_data_fp1], data[shift][fuvb_data_fp1], 'ko',label = 'FUVB LP4 | {} | FP1'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp2], data[shift][fuvb_data_fp2], 'kx',label = 'FUVB LP4 | {} | FP2'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp3], data[shift][fuvb_data_fp3], 'kv',label = 'FUVB LP4 | {} | FP3'.format(cenwave))
+                    ax2.plot(data['date'][fuvb_data_fp4], data[shift][fuvb_data_fp4], 'k*',label = 'FUVB LP4 | {} | FP4'.format(cenwave))
+                    #-- End LPs
+
+                    for lp_date in [56101,57062,58028]:
+                        ax1.axvline(lp_date, ls='--', lw=2, c='k')
+                        ax2.axvline(lp_date, ls='--', lw=2, c='k')
+
+                    ax1.set_xlabel('DATE [MJD]', fontsize=20, fontweight='bold')
+                    ax1.set_ylabel('{} [Pixels]'.format(shift_label), fontsize=20, fontweight='bold')
+                    ax1.grid(linestyle='--')
+                    ax1.legend(loc='upper center', bbox_to_anchor=(0.5, 1.4),
+                                ncol=4, fancybox=True, shadow=True, fontsize=15)
+                    
+                    ax2.set_xlabel('DATE [MJD]', fontsize=20, fontweight='bold')
+                    ax2.set_ylabel('{} [Pixels]'.format(shift_label), fontsize=20, fontweight='bold')
+                    ax2.grid(linestyle='--')
+                    ax2.legend(loc='upper center', bbox_to_anchor=(0.5, 1.4),
+                                ncol=4, fancybox=True, shadow=True, fontsize=15)
+
+                    # f.suptitle('{}[A/B] {} | {}'.format(shift_label,detector,cenwave), fontsize=25, fontweight='bold')
+                    filename = os.path.join(out_dir,'test','{}_{}_{}_BY_LIFE_POS.png'.format(shift_label, detector, cenwave))
+                    f.savefig(filename)
+                    plt.close(f)
+
+                elif detector == 'NUV':
+                    f,(ax1,ax2,ax3) = plt.subplots(3,1,figsize=(30,15))
+                    
+                    #-- NUVA FP-POS 1-4
+                    nuva_data_fp1 = np.where((data['segment'] == 'NUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 1))[0]
+                    
+                    nuva_data_fp2 = np.where((data['segment'] == 'NUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 2))[0]
+
+                    nuva_data_fp3 = np.where((data['segment'] == 'NUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 3))[0]
+
+                    nuva_data_fp4 = np.where((data['segment'] == 'NUVA') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 4))[0]
+
+                    #-- NUVB FP-POS 1-4
+                    nuvb_data_fp1 = np.where((data['segment'] == 'NUVB') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 1))[0]
+                    
+                    nuvb_data_fp2 = np.where((data['segment'] == 'NUVB') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 2))[0]
+
+                    nuvb_data_fp3 = np.where((data['segment'] == 'NUVB') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 3))[0]
+
+                    nuvb_data_fp4 = np.where((data['segment'] == 'NUVB') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 4))[0]
+
+                    #-- NUVC FP-POS 1-4
+                    nuvc_data_fp1 = np.where((data['segment'] == 'NUVC') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 1))[0]
+                    
+                    nuvc_data_fp2 = np.where((data['segment'] == 'NUVC') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 2))[0]
+
+                    nuvc_data_fp3 = np.where((data['segment'] == 'NUVC') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 3))[0]
+
+                    nuvc_data_fp4 = np.where((data['segment'] == 'NUVC') &
+                                            (data['cenwave'] == cenwave) &
+                                            (data['fppos'] == 4))[0]
+
+                    ax1.plot(data['date'][nuva_data_fp1], data[shift][nuva_data_fp1], 'bo',label = 'NUVA | {} | FP1'.format(cenwave))
+                    ax1.plot(data['date'][nuva_data_fp2], data[shift][nuva_data_fp2], 'bx',label = 'NUVA | {} | FP2'.format(cenwave))
+                    ax1.plot(data['date'][nuva_data_fp3], data[shift][nuva_data_fp3], 'bv',label = 'NUVA | {} | FP3'.format(cenwave))
+                    ax1.plot(data['date'][nuva_data_fp4], data[shift][nuva_data_fp4], 'b*',label = 'NUVA | {} | FP4'.format(cenwave))
+                    ax1.set_xlabel('DATE [MJD]', fontsize=20, fontweight='bold')
+                    ax1.set_ylabel('{} [Pixels]'.format(shift_label), fontsize=20, fontweight='bold')
+                    ax1.grid(linestyle='--')
+                    ax1.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05),
+                                ncol=4, fancybox=True, shadow=True, fontsize=15)
+
+                    ax2.plot(data['date'][nuvb_data_fp1], data[shift][nuvb_data_fp1], 'ro',label = 'NUVB | {} | FP1'.format(cenwave))
+                    ax2.plot(data['date'][nuvb_data_fp2], data[shift][nuvb_data_fp2], 'rx',label = 'NUVB | {} | FP2'.format(cenwave))
+                    ax2.plot(data['date'][nuvb_data_fp3], data[shift][nuvb_data_fp3], 'rv',label = 'NUVB | {} | FP3'.format(cenwave))
+                    ax2.plot(data['date'][nuvb_data_fp4], data[shift][nuvb_data_fp4], 'r*',label = 'NUVB | {} | FP4'.format(cenwave))
+                    ax2.set_xlabel('DATE [MJD]', fontsize=20, fontweight='bold')
+                    ax2.set_ylabel('{} [Pixels]'.format(shift_label), fontsize=20, fontweight='bold')
+                    ax2.grid(linestyle='--')
+                    ax2.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05),
+                                ncol=4, fancybox=True, shadow=True, fontsize=15)
+
+                    ax3.plot(data['date'][nuvc_data_fp1], data[shift][nuvc_data_fp1], 'go',label = 'NUVC | {} | FP1'.format(cenwave))
+                    ax3.plot(data['date'][nuvc_data_fp2], data[shift][nuvc_data_fp2], 'gx',label = 'NUVC | {} | FP2'.format(cenwave))
+                    ax3.plot(data['date'][nuvc_data_fp3], data[shift][nuvc_data_fp3], 'gv',label = 'NUVC | {} | FP3'.format(cenwave))
+                    ax3.plot(data['date'][nuvc_data_fp4], data[shift][nuvc_data_fp4], 'g*',label = 'NUVC | {} | FP4'.format(cenwave))
+                    ax3.set_xlabel('DATE [MJD]', fontsize=20, fontweight='bold')
+                    ax3.set_ylabel('{} [Pixels]'.format(shift_label), fontsize=20, fontweight='bold')
+                    ax3.grid(linestyle='--')
+                    ax3.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05),
+                                ncol=4, fancybox=True, shadow=True, fontsize=15)
+
+                    f.suptitle('{}[A/B/C] {} | {}'.format(shift_label,detector,cenwave), fontsize=25, fontweight='bold')
+                    filename = os.path.join(out_dir,'{}_{}_{}.png'.format(shift_label, detector, cenwave))
+                    f.savefig(filename)
+                    plt.close(f)
+
+    
+#----------------------------------------------------------
 def fp_diff(data):
     index = np.where((data['detector'] == 'FUV'))[0]
     data = data[index]
@@ -979,17 +1535,17 @@ def monitor():
     rawacq_data = make_shift_table(Rawacqs)
     
     #-- Make static plots.
-    make_plots(flash_data, rawacq_data, monitor_dir)
-    
-    make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'FUV')
-    make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'NUV')
-
+    # make_plots(flash_data, rawacq_data, monitor_dir)
+    # make_plots_per_fppos(flash_data, monitor_dir)
+    make_plots_per_cenwave(flash_data, monitor_dir)
+    # make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'FUV')
+    # make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'NUV')
     # make_plots_2(flash_data, rawacq_data, monitor_dir)
     # fp_diff(flash_data)
 
-    for item in glob.glob(os.path.join(monitor_dir, '*.p??')):
-        remove_if_there(os.path.join(webpage_dir, os.path.basename(item)))
-        shutil.copy(item, webpage_dir)
+    # for item in glob.glob(os.path.join(monitor_dir, '*.p??')):
+    #     remove_if_there(os.path.join(webpage_dir, os.path.basename(item)))
+    #     shutil.copy(item, webpage_dir)
 
     logger.info("FINISH MONITOR")
 

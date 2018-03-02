@@ -116,6 +116,8 @@ class Observations(BaseModel):
     aperture = CharField()
     opt_elem = CharField()
     extended = CharField()
+    expstart = FloatField()
+    expend = FloatField()
   
     class Meta:
         db_table = 'observations'  
@@ -161,8 +163,6 @@ class FUVA_raw_headers(BaseModel):
     'Table of raw fuva data'
 
     filename = CharField()
-    expstart = FloatField()
-    expend = FloatField()
     rawtime = FloatField()
     neventsa = FloatField()
     deventa = FloatField()
@@ -184,8 +184,6 @@ class FUVB_raw_headers(BaseModel):
     'Table of raw fuvb data'
 
     filename = CharField()
-    expstart = FloatField()
-    expend = FloatField()
     rawtime = FloatField()
     neventsb = FloatField()
     deventb = FloatField()
@@ -270,6 +268,7 @@ class Lampflash(BaseModel):
     filetype = CharField(default='N/A')
     cal_date = CharField(default='N/A')
     found = BooleanField(default=False)
+    life_adj = IntegerField(default='N/A')
     
     rootname = ForeignKeyField(Observations,
                                db_column='rootname',
@@ -399,3 +398,44 @@ class Flagged_Pixels(BaseModel):
                                on_delete='CASCADE')
     class Meta:
         db_table = 'bad_pixels'
+
+#-------------------------------------------------------------------------------
+
+class Jitter(BaseModel):
+    """Record data from jitter files"""
+    rootname = CharField()
+    seconds = FloatField()
+    v2_dom = FloatField()
+    v3_dom = FloatField()
+    v2_roll = FloatField()
+    v3_roll = FloatField()
+    si_v2_avg = FloatField()
+    si_v2_rms = FloatField()
+    si_v2_p2p = FloatField()
+    si_v3_avg = FloatField()
+    si_v3_rms = FloatField()
+    si_v3_p2p = FloatField()
+    ra = FloatField()
+    dec = FloatField()
+    roll = FloatField()
+    limbang = FloatField()
+    termang = FloatField()
+    latitude = FloatField()
+    longitude = FloatField()
+    mag_v1 = FloatField()
+    mag_v2 = FloatField()
+    mag_v3 = FloatField()
+    brightlimb = BooleanField()
+    fgs_flags = FloatField()
+    daynight = BooleanField()
+    recenter = BooleanField()
+    takedata = BooleanField()
+    slewflag = BooleanField()
+
+    filename = ForeignKeyField(Files,
+                               db_column='filename',
+                               default=None,
+                               to_field="filename",
+                               on_delete='CASCADE')
+    class Meta:
+        db_table = 'jitter'

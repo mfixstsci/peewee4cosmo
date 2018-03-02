@@ -34,6 +34,7 @@ import shutil
 import logging
 logger = logging.getLogger(__name__)
 
+import argparse
 from astropy.io import fits
 from astropy.time import Time
 
@@ -288,11 +289,13 @@ def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=5
     new_gsagtab.fits
     """
 
-    if filter:
+    if filter and not by_date:
         logger.info('CHECKING LP PIXEL RECOVERY')
         check_pixel_recovery('FUVA')
         check_pixel_recovery('FUVB')
         filename = 'gsag_filter_%s.fits'%(TIMESTAMP)
+    elif by_date and filter:
+        filename = 'gsag_smov_to_{}_filter.fits'.format(tab_date)
     elif by_date:
         filename = 'gsag_smov_to_{}.fits'.format(tab_date)
     else:
@@ -361,18 +364,25 @@ def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=5
             hv_level = int(hv_level)
 
             #-- Logic to filter hotspots or nah.
-            if filter:
+            if filter and not by_date:
                 #-- Get all of the sagged pixels for a specific Segment/HV Level combo.
                 flagged_pix = list(Flagged_Pixels.select().distinct().where(
                                                                             (Flagged_Pixels.segment == segment) &
                                                                             (Flagged_Pixels.hv_lvl >= hv_level) &
                                                                             (Flagged_Pixels.recovery == False)
                                                                             ).dicts())
-            elif by_date:
+            elif by_date and not filter:
                 #-- Get all of the sagged pixels for a specific Segment/HV Level combo.
                 flagged_pix = list(Flagged_Pixels.select().distinct().where(
                                                                             (Flagged_Pixels.segment == segment) &
+                                                                            (Flagged_Pixels.mjd_below_3 <= tab_date) &
+                                                                            (Flagged_Pixels.hv_lvl >= hv_level)
+                                                                            ).dicts())
+            elif filter and by_date:
+                flagged_pix = list(Flagged_Pixels.select().distinct().where(
+                                                                            (Flagged_Pixels.segment == segment) &
                                                                             (Flagged_Pixels.hv_lvl >= hv_level) &
+                                                                            (Flagged_Pixels.recovery == False) &
                                                                             (Flagged_Pixels.mjd_below_3 <= tab_date)
                                                                             ).dicts())
             else:
@@ -515,3 +525,50 @@ def check_pixel_recovery(segment):
             continue
 
     database.close()
+
+#------------------------------------------------------------------------------
+def make_gsagtab_db_entry():
+    """
+    Entry Point for gsagtab creation. Able to pass arguments via command line.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('--out_directory',
+                        type=str,
+                        help="Path you want to write gsagtab out to.")
+    
+    #-- For dates, defaults give sagging activity over the past 10 days.
+    parser.add_argument('--filter',
+                        type=bool,
+                        default=False,
+                        help="Do you want to filter the gainsag tab?")
+    
+    parser.add_argument('--blue',
+                        type=bool,
+                        default=False,
+                        help="Do you want to make a blue mode table?")
+    
+    parser.add_argument('--by_date',
+                        type=bool,
+                        default=False,
+                        help="Do you want plan to make a table up to a certain date?")
+    
+    parser.add_argument('--tab_date',
+                        type=float,
+                        default=57322.0,
+                        help="Date to make table up to.")
+
+    args = parser.parse_args()
+
+    #-- Make gain sag table.
+    make_gsagtab_db(args.out_directory, blue=args.blue, filter=args.filter, by_date=args.by_date, tab_date=args.tab_date )
+#------------------------------------------------------------------------------

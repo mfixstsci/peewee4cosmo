@@ -54,8 +54,6 @@ def fuva_raw_keys(file_result):
     with fits.open(file_path) as hdu:
             keywords = {'filename': file_result.filename,
                         'rootname': hdu[0].header['rootname'],
-                        'expstart': hdu[1].header['expstart'],
-                        'expend': hdu[1].header['expend'],
                         'rawtime': hdu[1].header['rawtime'],
                         'neventsa': hdu[1].header['neventsa'],
                         'deventa': hdu[1].header['deventa'],
@@ -80,8 +78,6 @@ def fuvb_raw_keys(file_result):
     with fits.open(file_path) as hdu:
             keywords = {'filename': file_result.filename,
                         'rootname': hdu[0].header['rootname'],
-                        'expstart': hdu[1].header['expstart'],
-                        'expend': hdu[1].header['expend'],
                         'rawtime': hdu[1].header['rawtime'],
                         'neventsb': hdu[1].header['neventsb'],
                         'deventb': hdu[1].header['deventb'],
@@ -186,7 +182,9 @@ def obs_keys(file_result):
                         'opt_elem': hdu[0].header['opt_elem'],
                         'extended': hdu[0].header['extended'],
                         'opus_ver': hdu[0].header['opus_ver'],
-                        'life_adj': hdu[0].header['life_adj']
+                        'life_adj': hdu[0].header['life_adj'],
+                        'expstart': hdu[1].header['expstart'],
+                        'expend': hdu[1].header['expend']
                         }
     return keywords
 

@@ -23,6 +23,8 @@ setup(
                                         'cosmo_webapp_debug=cosmo_peewee.webapp.main:run_debug',
 					                    'cosmo_dark_period=cosmo_peewee.dark.dark_periodicity:main',
                                         'cosmo_gsagtab_by_date=cosmo_peewee.cci.gainmap_sagged_pixel_overplotter:gsagtab_plot_by_date',
+                                        'cosmo_gsagtab_residual_plot=cosmo_peewee.cci.gainmap_sagged_pixel_overplotter:compare_and_plot_gsagtable_data_entry',
+                                        'cosmo_gsagtab_creator=cosmo_peewee.cci.gainsag:make_gsagtab_db_entry',
                                         'cosmo_data_by_rootname=cosmo_peewee.database.utils:gather_all_data_rootname',
                                         ],
     },

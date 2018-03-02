@@ -26,7 +26,7 @@ import collections
 import multiprocessing as mp
 import numpy as np
 from .models import get_database, get_settings
-from .models import Files, NUV_corr_headers, FUVA_raw_headers, FUVB_raw_headers
+from .models import Files, NUV_corr_headers, FUVA_raw_headers, FUVB_raw_headers, Jitter
 from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs, Darks, Stims, Observations, Gain, Flagged_Pixels
 
 from .database_keys import nuv_corr_keys, fuva_raw_keys, fuvb_raw_keys
@@ -49,6 +49,7 @@ from ..cci.gainsag import main as cci_main
 from ..cci.find_bad_pix import populate_bad_pix
 from ..cci.constants import *
 
+from ..jitter.jitter import calculate_time_and_store_jitter
 #-------------------------------------------------------------------------------
 
 def bulk_insert(table, data_source, debug=False):
@@ -657,7 +658,8 @@ def ingest_all():
               Darks,
               Stims,
               Gain,
-              Flagged_Pixels]
+              Flagged_Pixels,
+              Jitter]
 
     #-- Safe checks existance of tables first to make sure they dont get clobbered.
     database.create_tables(tables, safe=True)
@@ -723,7 +725,7 @@ def ingest_all():
     #-- Populate flagged pixels table.
     logger.info("POPULATING FLAGGED PIXEL TABLE")
     find_flagged()
-    
+
 #-------------------------------------------------------------------------------
 
 def run_monitors():
