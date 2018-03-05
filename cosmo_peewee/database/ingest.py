@@ -48,8 +48,6 @@ from ..cci.gainsag import main as cci_main
 
 from ..cci.find_bad_pix import populate_bad_pix
 from ..cci.constants import *
-
-from ..jitter.jitter import calculate_time_and_store_jitter
 #-------------------------------------------------------------------------------
 
 def bulk_insert(table, data_source, debug=False):
