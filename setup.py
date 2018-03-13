@@ -26,6 +26,7 @@ setup(
                                         'cosmo_gsagtab_residual_plot=cosmo_peewee.cci.gainmap_sagged_pixel_overplotter:compare_and_plot_gsagtable_data_entry',
                                         'cosmo_gsagtab_creator=cosmo_peewee.cci.gainsag:make_gsagtab_db_entry',
                                         'cosmo_data_by_rootname=cosmo_peewee.database.utils:gather_all_data_rootname',
+                                        'cosmo_gainmap_gsag_plot=cosmo_peewee.cci.gainmap_sagged_pixel_overplotter:plot_gainmap_and_gsagtab_by_hv_entry',
                                         ],
     },
     install_requires = ['setuptools',

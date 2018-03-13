@@ -77,7 +77,8 @@ def main(out_dir, hotspot_filter=True):
     hotspot_plotter_interactive('FUVA')
     hotspot_plotter_interactive('FUVB')
     
-    make_gsagtab_db(out_dir, by_date=True)
+    #-- Uncomment this when you want to make a table up to a certain date.
+    # make_gsagtab_db(out_dir, by_date=True)
 
     logger.info("MAKING NEW GSAGTAB")
     reg_gsagtab = make_gsagtab_db(out_dir, filter=hotspot_filter)
@@ -174,7 +175,7 @@ def gsagtab_extension(date, lx, dx, ly, dy, dq, dethv, hv_string, segment):
     dq = np.array(dq)
 
     #-- Create data columns for fits file.
-    date_col = fits.Column('DATE','D','MJD',array=date)
+    date_col = fits.Column('DATE','D','MJD',array=np.array(date))
     lx_col = fits.Column('LX','J','pixel',array=lx)
     dx_col = fits.Column('DX','J','pixel',array=dx)
     ly_col = fits.Column('LY','J','pixel',array=ly)
@@ -182,8 +183,8 @@ def gsagtab_extension(date, lx, dx, ly, dy, dq, dethv, hv_string, segment):
     dq_col = fits.Column('DQ','J','',array=dq)
     
     #-- Create data table
-    tab = fits.TableHDU.from_columns([date_col,lx_col,ly_col,dx_col,dy_col,dq_col])
-
+    tab = fits.BinTableHDU.from_columns([date_col,lx_col,ly_col,dx_col,dy_col,dq_col])
+    
     #-- Add comments.
     tab.header.add_comment(' ',after='TFIELDS')
     tab.header.add_comment('  *** Column formats ***',after='TFIELDS')
@@ -424,7 +425,7 @@ def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=5
                 lx.append(0)
                 ly.append(0)
                 dx.append(0)
-                dy.append(0)
+                dy.append(0)                
                 date.append(0)
                 dq.append(8192)
 

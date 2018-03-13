@@ -538,9 +538,9 @@ def gsagtab_plot_by_date():
         plt.legend(fontsize=15)
         
         if args.compare:
-            filename='gsag_by_date_compare_{}-{}_{}_{}.png'.format(args.min_date, args.max_date, hv, args.segment)
+            filename='gsag_by_date_compare_{}-{}_{}_{}.png'.format(int(args.min_date), int(args.max_date), hv, args.segment)
         else:
-            filename='gsag_by_date_{}-{}_{}_{}.png'.format(args.min_date, args.max_date, hv, args.segment)
+            filename='gsag_by_date_{}-{}_{}_{}.png'.format(int(args.min_date), int(args.max_date), hv, args.segment)
         
         plt.savefig(os.path.join(settings['monitor_location'], 'CCI', 'gsagtab_comparisons', filename))
         plt.close()
@@ -664,4 +664,99 @@ def compare_and_plot_gsagtable_data_entry():
                                 outdir=args.out_dir)
 
     pool.map(partial, range(1,78))
+#-------------------------------------------------------------------------------
+def plot_gainmap_and_gsagtab_by_hv(gsagtab, hv_lvl):
+    """
+    Give a HV and gain sag tables, plot segments FUVA + FUVB in single plot.
+
+    Parameters
+    ----------
+    gsagtab: str
+        Path to gsagtab
+    hv_lvl: int
+        HV level you are interested in.
+    """
+
+    settings = get_settings()
+    out_dir = os.path.join(settings['monitor_location'], 'CCI', 'gainmap_gsagtab_delivery_plots')
+    
+    gsagtab_hdu = fits.open(gsagtab)
+    gainmap = fits.open(os.path.join(settings['monitor_location'], 'CCI', 'total_gain_{}.fits'.format(hv_lvl)))
+    
+    #-- gsagtab keywords for high voltage are HVLEVEL[A/B].
+    hvlvl_key = {'FUVA':'HVLEVELA',
+                 'FUVB':'HVLEVELB'}
+
+    #-- Find which extension in the GSAGTAB matches the HVLVL and SEGMENT for the gainmap.
+    for ext in range(1, len(gsagtab_hdu)):
+        gsagtab_segment = gsagtab_hdu[ext].header['segment']
+        if (hv_lvl == gsagtab_hdu[ext].header[hvlvl_key[gsagtab_segment]]) and (gsagtab_hdu[ext].header['segment']=='FUVA'):
+            fuva_gsag_ext = ext
+        elif (hv_lvl == gsagtab_hdu[ext].header[hvlvl_key[gsagtab_segment]]) and (gsagtab_hdu[ext].header['segment']=='FUVB'):
+            fuvb_gsag_ext = ext
+        else:
+            pass
+    
+    #-- Set some plotting peramimeters.
+    plt.rc('xtick', labelsize=20) 
+    plt.rc('ytick', labelsize=20)
+    plt.rc('axes', lw=2)
+    
+    gsagtab_name = os.path.basename(gsagtab)
+
+    filename = 'gainmap_{}_{}.png'.format(os.path.splitext(gsagtab_name)[0],hv_lvl)
+    f, (ax1, ax2) = plt.subplots(2, figsize=(25,15))
+    
+    plt.subplots_adjust(hspace=0.5)
+
+    
+    f.suptitle('GSAGTAB: {}'.format(gsagtab_name), fontsize=25, fontweight='bold')
+    
+    gm = ax1.imshow(gainmap['FUVALAST'].data, aspect='auto', cmap='gist_gray')
+    ax1.scatter(gsagtab_hdu[fuva_gsag_ext].data['LX'], gsagtab_hdu[fuva_gsag_ext].data['LY'], marker='+', c='r', label='FUVA {}'.format(hv_lvl))
+    ax1.set_title('FUVA GAINMAP + GSAG', fontsize=20, fontweight='bold')
+    ax1.set_xlabel('XCORR (Pixels)', fontsize=20, fontweight='bold')
+    ax1.set_ylabel('YCORR (Pixels)', fontsize=20, fontweight='bold')
+    ax1.set_xlim([0,16384])
+    ax1.set_ylim([300,600])
+    ax1.legend(fontsize=20)
+    f.colorbar(gm, ax=ax1)
+
+    gm = ax2.imshow(gainmap['FUVBLAST'].data, aspect='auto', cmap='gist_gray')
+    ax2.scatter(gsagtab_hdu[fuvb_gsag_ext].data['LX'], gsagtab_hdu[fuvb_gsag_ext].data['LY'], marker='+', c='r', label='FUVB {}'.format(hv_lvl))
+    ax2.set_title('FUVB GAINMAP + GSAG', fontsize=20, fontweight='bold')
+    ax2.set_xlabel('XCORR (Pixels)', fontsize=20, fontweight='bold')
+    ax2.set_ylabel('YCORR (Pixels)', fontsize=20, fontweight='bold')
+    ax2.set_xlim([0,16384])
+    ax2.set_ylim([300,800])
+    ax2.legend(fontsize=20)
+    f.colorbar(gm, ax=ax2)
+    
+    plt.savefig(os.path.join(out_dir, filename))
+    plt.close(f)
+#-------------------------------------------------------------------------------
+def plot_gainmap_and_gsagtab_by_hv_entry():
+    """
+    Entry Point for plot_gainmap_and_gsagtab_by_hv.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
+    parser = argparse.ArgumentParser()    
+    parser.add_argument('--gsagtab',
+                        type=str,
+                        help="Path to gsagtab")
+    
+    parser.add_argument('--hv_lvl',
+                        type=int,
+                        help="High Voltage Level")
+    args = parser.parse_args()
+
+    plot_gainmap_and_gsagtab_by_hv(args.gsagtab, args.hv_lvl)
 #-------------------------------------------------------------------------------
