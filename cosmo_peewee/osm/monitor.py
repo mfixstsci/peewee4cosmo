@@ -1534,18 +1534,20 @@ def monitor():
     flash_data = make_shift_table(Lampflash)
     rawacq_data = make_shift_table(Rawacqs)
     
+    # ascii.write(flash_data, os.path.join(monitor_dir,'onitor_db_table.csv'), format='csv')
+
     #-- Make static plots.
-    # make_plots(flash_data, rawacq_data, monitor_dir)
+    make_plots(flash_data, rawacq_data, monitor_dir)
     # make_plots_per_fppos(flash_data, monitor_dir)
-    make_plots_per_cenwave(flash_data, monitor_dir)
-    # make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'FUV')
-    # make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'NUV')
+    # make_plots_per_cenwave(flash_data, monitor_dir)
+    make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'FUV')
+    make_interactive_plots(flash_data, rawacq_data, monitor_dir, 'NUV')
     # make_plots_2(flash_data, rawacq_data, monitor_dir)
     # fp_diff(flash_data)
 
-    # for item in glob.glob(os.path.join(monitor_dir, '*.p??')):
-    #     remove_if_there(os.path.join(webpage_dir, os.path.basename(item)))
-    #     shutil.copy(item, webpage_dir)
+    for item in glob.glob(os.path.join(monitor_dir, '*.p??')):
+        remove_if_there(os.path.join(webpage_dir, os.path.basename(item)))
+        shutil.copy(item, webpage_dir)
 
     logger.info("FINISH MONITOR")
 

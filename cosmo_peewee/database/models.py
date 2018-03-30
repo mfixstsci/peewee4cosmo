@@ -1,4 +1,10 @@
+"""Database models for COSMO.
+
+This module lays out the structure for all of the tables in COSMO.
+"""
+
 from __future__ import print_function, absolute_import, division
+__all__ = ['get_database']
 
 import os
 
@@ -9,8 +15,6 @@ try:
     import yaml
 except ImportError:
     from .yaml import yaml
-
-__all__ = ['get_database']
 
 #-------------------------------------------------------------------------------
 
@@ -32,7 +36,8 @@ def get_settings(config_file=None):
 
     """
 
-    config_file = config_file or os.path.join(os.environ['HOME'], "configure_dev.yaml")
+    config_file = config_file or os.path.join(os.environ['HOME'], 
+                                              "configure_dev.yaml")
     
     with open(config_file, 'r') as f:
         settings = yaml.load(f)
@@ -439,3 +444,18 @@ class Jitter(BaseModel):
                                on_delete='CASCADE')
     class Meta:
         db_table = 'jitter'
+
+#-------------------------------------------------------------------------------
+
+class Gain_Trends(BaseModel):
+    """Record decreases in Gain"""
+    proj_bad_mjd = FloatField()
+    segment = CharField()
+    hv_lvl = IntegerField()
+    x = IntegerField()
+    y = IntegerField()
+    slope = FloatField()
+    intercept = FloatField()
+    
+    class Meta:
+        db_table = 'gainsag_trend'

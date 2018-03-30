@@ -41,7 +41,6 @@ from astropy.time import Time
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from sqlalchemy.sql.functions import concat
 
 from ..utils import send_email
 from .constants import *  
@@ -50,6 +49,7 @@ from ..database.models import get_database, get_settings, Files
 from ..database.models import Flagged_Pixels, Gain
 from .gainmap import make_all_gainmaps, make_webpage_plots
 from .gainmap_sagged_pixel_overplotter import make_overplot, hotspot_plotter_interactive, gsagtab_overplot_comparison
+from .phaimage import make_phaimages
 
 import collections
 import functools
@@ -73,6 +73,9 @@ def main(out_dir, hotspot_filter=True):
     settings = get_settings()
     logger.info("STARTING MONITOR")
     
+    logger.info('MAKING PHAIMAGES')
+    make_phaimages(out_dir)
+
     logger.info("MAKING HOTSPOT PLOTS")
     hotspot_plotter_interactive('FUVA')
     hotspot_plotter_interactive('FUVB')
@@ -125,12 +128,12 @@ def main(out_dir, hotspot_filter=True):
     #-- Create comparison figures for HV 163-175    
     for new_gsagtab, calcos_tab in zip(gsagtabs, cdbs_gsagtabs):
         #-- Set up partials for multiprocessing.
-        partial = functools.partial(gsagtab_overplot_comparison,
-                                    compare=True, 
-                                    potential_gsagtab=new_gsagtab,
-                                    current_gsagtab=calcos_tab)
+        # partial = functools.partial(gsagtab_overplot_comparison,
+        #                             compare=True, 
+        #                             potential_gsagtab=new_gsagtab,
+        #                             current_gsagtab=calcos_tab)
 
-        pool.map(partial, [163,167,169,171,173,175,178])
+        # pool.map(partial, [163,167,169,171,173,175,178])
         
         #-- Just make overplots without comparing.
         partial = functools.partial(gsagtab_overplot_comparison,
