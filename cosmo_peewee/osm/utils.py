@@ -6,17 +6,12 @@ import numpy as np
 
 __all__ = ['check_shifts']
 
-#-------------------------------------------------------------------------------
-
 class OSMError(Exception):
     """Custom exception"""
     pass
 
-#-------------------------------------------------------------------------------
-
 def check_shifts(filename):
     """Check if the found shifts are consistent
-
     """
 
     limits = {'FUV' : 50,

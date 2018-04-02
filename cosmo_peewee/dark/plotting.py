@@ -1,22 +1,21 @@
 """ Make darkrate plots
-
 """
 
 from __future__ import absolute_import, division
+
+import math
+import os
 
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
+import numpy as np
 import scipy
 from scipy.ndimage.filters import convolve
-import numpy as np
-import math
-import os
 
 from ..utils import remove_if_there
 
-#-------------------------------------------------------------------------------
 
 def magnitude(x):
     """Calculate the order of magnitude of the value x
@@ -35,7 +34,6 @@ def magnitude(x):
 
     return int(math.floor(math.log10(x)))
 
-#-------------------------------------------------------------------------------
 
 def plot_histogram(dark, outname):
     """Plot a linear and logarithmic histogram of the dark rates.
@@ -88,7 +86,7 @@ def plot_histogram(dark, outname):
     ax.set_xlim(dark.min(), dark.max())
     ax.xaxis.set_major_formatter(FormatStrFormatter('%3.2e'))
 
-    #--- Logarithmic
+    # Logarithmic
 
     ax = fig.add_subplot(2, 1, 2)
     #log_bins = np.logspace(np.log10(dark.min()), np.log10(dark.max()), 100)
@@ -123,7 +121,6 @@ def plot_histogram(dark, outname):
     fig.savefig(outname, bbox_inches='tight')
     plt.close(fig)
 
-#-------------------------------------------------------------------------------
 
 def plot_time(detector, dark, date, temp, solar, solar_date, outname):
     """Plot the dar-rate vs time
@@ -201,7 +198,8 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
                                       2 * 10 ** magnitude(dark.mean())))
 
     dark_ax.set_xticklabels(['' for item in dark_ax.get_xticklabels()])
-    dark_ax.set_ylabel('Mean Dark Rate cnts/sec/pix', fontsize=18, fontweight='bold')
+    dark_ax.set_ylabel('Mean Dark Rate cnts/sec/pix', fontsize=18, 
+                       fontweight='bold')
 
     if 'FUVA' in outname:
         segment = 'FUVA'
@@ -209,7 +207,8 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
         segment = 'FUVB'
     else:
         segment = 'NUV'
-    dark_ax.set_title('Global Dark Rate: %s' % (segment.upper()), fontsize=20, fontweight='bold')
+    dark_ax.set_title('Global Dark Rate: %s' % (segment.upper()), fontsize=20, 
+                      fontweight='bold')
     dark_ax.set_xlim(2009.5, date.max() + .1)
     dark_ax.legend(numpoints=1, shadow=True, loc='upper left')
     dark_ax.grid(True)
@@ -275,6 +274,7 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
                     lw=3,
                     alpha=1,
                     zorder=1)
+        
         plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
         sub_ax.set_xlabel('Decimal Year', fontsize=20, fontweight='bold')
         sub_ax.set_ylabel('Radio Flux', fontsize=17, fontweight='bold')
@@ -287,7 +287,6 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
     fig.savefig(outname, bbox_inches='tight')
     plt.close(fig)
 
-#-------------------------------------------------------------------------------
 
 def plot_orbital_rate(longitude, latitude, darkrate, sun_lon, sun_lat, outname):
     """Plot the dark-rate of the detector vs orbital position
@@ -378,7 +377,7 @@ def plot_orbital_rate(longitude, latitude, darkrate, sun_lon, sun_lat, outname):
     raw_input()
     '''
 
-    #-- Get rid of the SAA passages
+    # Get rid of the SAA passages
     index_keep = np.where((longitude < 250) | (latitude > 10))[0]
     darkrate = darkrate[index_keep]
     latitude = latitude[index_keep]
@@ -410,7 +409,7 @@ def plot_orbital_rate(longitude, latitude, darkrate, sun_lon, sun_lat, outname):
     ax2.set_xlabel('Long. - Sub-Solar Pnt', size=pl_opt['labelsize'],
                    fontweight=pl_opt['fontweight'], family='serif')
 
-    #-- Cut out the low-points
+    # Cut out the low-points
     dark_smooth = convolve(darkrate, np.ones(91)/91, mode='mirror')
 
     thresh = dark_smooth + 1.5*dark_smooth.std()
@@ -425,7 +424,8 @@ def plot_orbital_rate(longitude, latitude, darkrate, sun_lon, sun_lat, outname):
     elif detector == 'NUV':
         pass
     else:
-        raise ValueError("This needs to be NUV data at this point. Found: {}".format(detctor))
+        raise ValueError("This needs to be NUV data at this point. Found: {}"\
+                         .format(detctor))
 
     lon_diff = longitude - sun_lon
     lat_diff = latitude - sun_lat
@@ -461,11 +461,15 @@ def plot_orbital_rate(longitude, latitude, darkrate, sun_lon, sun_lat, outname):
                    fontweight=pl_opt['fontweight'], family='serif')
 
     for cur_ax in [ax, ax2, ax3]:
-        for xtick,ytick in zip(cur_ax.xaxis.get_ticklabels(),cur_ax.yaxis.get_ticklabels()):
+        for xtick,ytick in zip(cur_ax.xaxis.get_ticklabels(),
+                               cur_ax.yaxis.get_ticklabels()):
             xtick.set_weight("bold")
             ytick.set_weight("bold")
-        cur_ax.tick_params(axis="both", which="major", labelsize=pl_opt['ticksize'],
-                           width=pl_opt['tickwidth'], length=pl_opt['ticklength'])
+        
+        cur_ax.tick_params(axis="both", which="major", 
+                           labelsize=pl_opt['ticksize'],
+                           width=pl_opt['tickwidth'], 
+                           length=pl_opt['ticklength'])
 
     remove_if_there(outname)
     fig.savefig(outname)
@@ -480,14 +484,15 @@ def plot_orbital_rate(longitude, latitude, darkrate, sun_lon, sun_lat, outname):
                      method='nearest' )
     image = medfilt(thing.T, (5,5))
     '''
-    
-#-------------------------------------------------------------------------------
+
 
 def plot_spatial(filename):
 
-    hdu = fits.open('/smov/cos/Data/11895/otfrdata/12-01-2014/lb8s2mn9q_corrtag_a.fits.gz')
+    hdu = fits.open('/smov/cos/Data/11895/otfrdata/12-01-2014/\
+                    lb8s2mn9q_corrtag_a.fits.gz')
     segment = hdu[0].header['segment']
-    #-- Set boundaries based on segment/detector
+
+    #  Set boundaries based on segment/detector
     if segment == 'N/A':
         segment = 'NUV'
         xlim = (0, 1024)
@@ -504,10 +509,9 @@ def plot_spatial(filename):
     else:
         raise ValueError('WHAT SEGMENT IS THIS?! {}'.format(segment))
 
-#-------------------------------------------------------------------------------
+
 def find_boundaries(img, xtractab, cenwave, aperture, segment):    
-    """
-    Find minimum and maximum y positions to extract spectra.
+    """Find minimum and maximum y positions to extract spectra.
 
     Parameters
     ----------
@@ -518,40 +522,40 @@ def find_boundaries(img, xtractab, cenwave, aperture, segment):
     """
     lref_dir = "/grp/hst/cdbs/lref/"
     with fits.open(lref_dir+xtractab[5:]) as onedx:
-        wh = np.where((onedx[1].data['CENWAVE'] == cenwave) &
-                      (onedx[1].data['APERTURE'] == aperture) &
-                      (onedx[1].data['SEGMENT'] == segment) )
+        wh = np.where((onedx[1].data['CENWAVE'] == cenwave)
+                      & (onedx[1].data['APERTURE'] == aperture)
+                      & (onedx[1].data['SEGMENT'] == segment))
         data_1dx = onedx[1].data[wh]
 
     min_y = data_1dx['B_SPEC'] - (data_1dx['HEIGHT']/2)
     max_y = data_1dx['B_SPEC'] + (data_1dx['HEIGHT']/2)
 
     return min_y, max_y
-#-------------------------------------------------------------------------------
+
+
 def make_image(xarr, yarr):
-    """
-    This very basically makes a 2D image from a list of coordinates
+    """This very basically makes a 2D image from a list of coordinates
     """
 
     img = np.zeros((1024, 16384))
     xbin = np.asarray( np.floor((xarr + 0.5)), dtype=np.int)
     ybin = np.asarray( np.floor((yarr + 0.5)), dtype=np.int)
     
-    #-- I think RANDCORR pushes some y coordinates outside of the detector, so
-    #-- we won't care about those. They're on the edges anyway...
+    # I think RANDCORR pushes some y coordinates outside of the detector, so
+    # we won't care about those. They're on the edges anyway...
     for x, y in zip(xbin, ybin):
         try:
             img[y, x] += 1
-            #-- This you'll probably need to bin when you get down to low S/N.
+            # This you'll probably need to bin when you get down to low S/N.
         except IndexError:
-            #-- print x, y, 'Out of bounds'
+            # print x, y, 'Out of bounds'
             continue
 
     return img
-#-------------------------------------------------------------------------------
+
+
 def extract_image(img, xtractab, cenwave, aperture, segment):
-    """
-    This sums all the counts in a specific range centered around where the
+    """This sums all the counts in a specific range centered around where the
     data are (hopefully) with a box size of 35
     
     Parameters

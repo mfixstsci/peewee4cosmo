@@ -3,12 +3,10 @@ from __future__ import absolute_import, division
 from astropy.io import fits
 import numpy as np
 
-#-------------------------------------------------------------------------------
 
 class InputError(Exception):
     pass
 
-#-------------------------------------------------------------------------------
 
 class SuperDark(object):
     def __init__(self, obs_list=[]):
@@ -42,7 +40,6 @@ class SuperDark(object):
                     raise InputError("Multiple values of {} found"
                                      .format(keyword))
 
-#-------------------------------------------------------------------------------
 
 class NUVDark(SuperDark):
     def __init__(self, obs_list):
@@ -52,7 +49,6 @@ class NUVDark(SuperDark):
         self.ylim = (0, 1024)
         self.dark = np.zeros(self.shape)
 
-#-------------------------------------------------------------------------------
 
 class FUVDark(SuperDark):
     def __init__(self, obs_list):
@@ -73,5 +69,3 @@ class FUVDark(SuperDark):
 
         self.dark_a = np.zeros(self.shape)
         self.dark_b = np.zeros(self.shape)
-
-#-------------------------------------------------------------------------------

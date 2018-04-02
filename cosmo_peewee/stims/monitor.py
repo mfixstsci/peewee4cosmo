@@ -1,7 +1,5 @@
 """Script to monitor the COS FUV STIM pulses in TIME-TAG observations.
-
 """
-
 from __future__ import absolute_import, print_function
 
 __author__ = 'Justin Ely, Mees Fix'
@@ -9,46 +7,42 @@ __maintainer__ = 'Mees Fix'
 __email__ = 'mfix@stsci.edu'
 __status__ = 'Active'
 
-import matplotlib.pyplot as plt
-import datetime
-import shutil
 import os
 import glob
-import numpy as np
-np.seterr(divide='ignore')
-from astropy.table import Table
-from astropy.time import Time
+
 from astropy import table
 from astropy.io import fits
-from scipy.stats import linregress
-import logging
-logger = logging.getLogger(__name__)
-
+from astropy.table import Table
+from astropy.time import Time
+from bokeh.io import output_file, show, save, gridplot
+from bokeh.layouts import column, row
+from bokeh.models import Range1d, HoverTool, BoxSelectTool, ColumnDataSource,\
+                         OpenURL, TapTool, Div, Button, CustomJS
+from bokeh.plotting import figure
 from calcos import ccos
-
-import smtplib
-from email.mime.text import MIMEText
+from copy import deepcopy
+import datetime
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import gc
+import logging
+import matplotlib.pyplot as plt
+import numpy as np
+from peewee import *
+import shutil
+from scipy.stats import linregress
+import smtplib
 
 from ..database.models import get_database, get_settings
 from ..database.models import Stims
-
-from peewee import *
-
 from ..utils import remove_if_there
 
-import gc
+np.seterr(divide='ignore')
+logger = logging.getLogger(__name__)
 
-from bokeh.io import output_file, show, save, gridplot
-from bokeh.plotting import figure
-from bokeh.models import Range1d, HoverTool, BoxSelectTool, ColumnDataSource, OpenURL, TapTool, Div, Button, CustomJS
-from bokeh.layouts import column, row
-
-from copy import deepcopy
-#-------------------------------------------------------------------------------
 
 def find_center(data):
-    """ Returns (height, x, y, width_x, width_y)
+    """Returns (height, x, y, width_x, width_y)
     the gaussian parameters of a 2D distribution by calculating its
     moments.
 
@@ -64,6 +58,7 @@ def find_center(data):
     y: int
         y position of the stim measurement
     """
+    
     total = data.sum()
     if not total:
         return None, None
@@ -71,15 +66,17 @@ def find_center(data):
     X, Y = np.indices(data.shape)
     x = (X * data).sum() / total
     y = (Y * data).sum() / total
+    
     #col = data[:, int(y)]
-    #width_x = np.sqrt(abs((np.arange(col.size) - y) ** 2 * col).sum() / col.sum())
+    #width_x = np.sqrt(abs((np.arange(col.size) - y) ** 2 * col).sum() / \
+    #                  col.sum())
     #row = data[int(x), :]
-    #width_y = np.sqrt(abs((np.arange(row.size) - x) ** 2 * row).sum() / row.sum())
+    #width_y = np.sqrt(abs((np.arange(row.size) - x) ** 2 * row).sum() / \
+    #                       row.sum())
     #height = data.max() 
 
     return y, x
 
-#-------------------------------------------------------------------------------
 
 def brf_positions(brftab, segment, position):
     """ Gets the search ranges for a stim pulse from
@@ -133,7 +130,6 @@ def brf_positions(brftab, segment, position):
 
     return xmin, xmax, ymin, ymax
 
-#-------------------------------------------------------------------------------
 
 def find_stims(image, segment, stim, brf_file):
     """Locate stims for table insertion.
@@ -156,7 +152,6 @@ def find_stims(image, segment, stim, brf_file):
 
     return found_x + x1, found_y + y1
 
-#-------------------------------------------------------------------------------
 
 def locate_stims(data_object, start=0, increment=None, brf_file=None):
     """Breaks a timetag exposure into different time steps and measures
@@ -181,7 +176,7 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
     """
     full_path = os.path.join(data_object.path, data_object.filename)
 
-    #-- change this to pull brf file from the header if not specified    
+    # change this to pull brf file from the header if not specified    
     if not brf_file:
         try:
             brf_file = os.path.join(os.environ['lref'], 's7g1700el_brf.fits')
@@ -212,7 +207,8 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
             yield stim_info
             raise StopIteration
 
-        #-- If increment is not supplied, use the rates supplied by the detector
+        # If increment is not supplied, use the rates supplied by the 
+        # detector
         if not increment:
             if exptime < 10:
                 increment = .03
@@ -225,7 +221,8 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
 
         stop = start + increment
 
-        #-- Iterate from start to stop, excluding final bin if smaller than increment
+        # Iterate from start to stop, excluding final bin if 
+        # smaller than increment
         start_times = np.arange(start, exptime-increment, increment)
         if not len(start_times):
             yield stim_info
@@ -234,12 +231,13 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
             events = hdu['events'].data
 
             #-- No COS observation has data below ~923
-            data_index = np.where((hdu[1].data['time'] >= sub_start) &
-                                  (hdu[1].data['time'] <= sub_start+increment))[0]
+            data_index = np.where((hdu[1].data['time'] >= sub_start)
+                                  & (hdu[1].data['time'] <= sub_start
+                                     +increment))[0]
 
             events = events[data_index]
 
-            #-- Call for this is x_values, y_values, image to bin to, offset in x
+            # Call for this is x_values, y_values, image to bin to, offset in x
             # ccos.binevents(x, y, array, x_offset, dq, sdqflags, epsilon)
             im = np.zeros((1024, 16384)).astype(np.float32)
             ccos.binevents(events['RAWX'].astype(np.float32),
@@ -264,15 +262,13 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
 
             yield deepcopy(stim_info)
         
-        #-- delete hdu at the end
-        #-- collect the garbage.
+        # delete hdu at the end
+        # collect the garbage.
         del hdu
         gc.collect()
 
-#-------------------------------------------------------------------------------
 
 def make_position_panel(segment, stim):
-    
     """Make a bokeh plotting panel for the x + y 
     pixel positions.
 
@@ -289,7 +285,7 @@ def make_position_panel(segment, stim):
         Panel containing scatter plot for stim/segment combo.
     """
     
-    #-- Open brftab and get some data.
+    # Open brftab and get some data.
     try:
         brf_file = os.path.join(os.environ['lref'], 's7g1700el_brf.fits')
     except KeyError:
@@ -297,7 +293,7 @@ def make_position_panel(segment, stim):
         brf_file = os.path.join(settings['lref'], 's7g1700el_brf.fits')
     brf = fits.getdata(brf_file, 1)
 
-    #-- Build "box" that stims should be contained in.
+    # Build "box" that stims should be contained in.
     if segment == 'FUVA' and stim == 'upper':
         xcenter = brf[0]['SX1']
         ycenter = brf[0]['SY1']
@@ -333,7 +329,7 @@ def make_position_panel(segment, stim):
     else:
         logger.info('WE DONT SUPPORT CONFIG {} {}'.formar(segment, stim))
     
-    #-- Make box where stims should ideally be...
+    # Make box where stims should ideally be...
     xs = [xcenter - xwidth,
           xcenter + xwidth,
           xcenter + xwidth,
@@ -345,11 +341,11 @@ def make_position_panel(segment, stim):
           ycenter + ywidth,
           ycenter - ywidth]
 
-    #-- Connect to DB
+    # Connect to DB
     database = get_database()
     database.connect()
 
-    #-- Set height and width.
+    # Set height and width.
     plt_wth = 600
     plt_hgt = 500
 
@@ -360,13 +356,13 @@ def make_position_panel(segment, stim):
 
     TOOLS ='box_zoom,box_select,crosshair,pan,reset,tap,save'
 
-    #data = Stims.select().where(Stims.segment==segment)
     data = []
-    for i, row in enumerate(Stims.select().where(Stims.segment==segment).dicts()):
+    for i, row in enumerate(Stims.select().where(Stims.segment==segment)\
+                            .dicts()):
         data.append(row.values())
         if not i:
-            #-- get keys here because if you use ._meta.fields.keys() 
-            #-- they will be out of order.
+            # get keys here because if you use ._meta.fields.keys() 
+            # they will be out of order.
             keys = row.keys()    
     
     database.close()
@@ -378,7 +374,7 @@ def make_position_panel(segment, stim):
                               'stim1_y',
                               'stim2_y'])
     if stim == 'upper':
-        #-- Build ColumnDataSource object
+        # Build ColumnDataSource object
         source = ColumnDataSource(data=dict(
                         date=data['time'],
                         rootname=data['rootname'],
@@ -408,7 +404,7 @@ def make_position_panel(segment, stim):
         stim_x, stim_y = 'stim2_x', 'stim2_y'
         location = 'Lower Right'
         
-    #-- Build Hovertool Tips.
+    # Build Hovertool Tips.
     hover = HoverTool(
                 tooltips=[
                         ("(x, y):","($x, $y)"),
@@ -421,22 +417,30 @@ def make_position_panel(segment, stim):
                 names=['data_scatter']   
                      )
 
-    p = figure(width=plt_wth, height=plt_hgt, x_range=Range1d(x_range_min, x_range_max), y_range=Range1d(y_range_min, y_range_max), title='{} {} Stim'.format(segment, location),tools=[TOOLS,hover])
+    p = figure(width=plt_wth, height=plt_hgt, 
+               x_range=Range1d(x_range_min, x_range_max), 
+               y_range=Range1d(y_range_min, y_range_max), 
+               title='{} {} Stim'.format(segment, location),
+               tools=[TOOLS,hover])
+
     p.title.text_font_size = '15pt'
-    p.circle(stim_x, stim_y, legend='Stim Pulse Location',size=4, name='data_scatter', color="black", source=source, alpha=0.5)
-    p.line(xs, ys, legend='Box Boundary', color=color, line_width=4, line_dash='dashed')
+    p.circle(stim_x, stim_y, legend='Stim Pulse Location',size=4, 
+             name='data_scatter', color="black", source=source, alpha=0.5)
+    p.line(xs, ys, legend='Box Boundary', color=color, 
+           line_width=4, line_dash='dashed')
     p.xaxis.axis_label = 'RAWX (Pixels)'
     p.yaxis.axis_label = 'RAWY (Pixels)'
     p.xaxis.axis_label_text_font_size = "13pt"
     p.yaxis.axis_label_text_font_size = "13pt"
 
-    #-- Provide URL and taptool and callback info.
+    # Provide URL and taptool and callback info.
     url = "http://archive.stsci.edu/proposal_search.php?id=@proposid&mission=hst"
     taptool = p.select(type=TapTool)
     taptool.callback = OpenURL(url=url)
 
     return p
-#-------------------------------------------------------------------------------
+
+
 def make_time_plot(segment, web_app=False):
     """Make the plot of the stim positions in 1d as a function of time for x + y
     for each segment.
@@ -456,21 +460,24 @@ def make_time_plot(segment, web_app=False):
     settings = get_settings()
     monitor_dir = settings['monitor_location']
 
-    outname = os.path.join(monitor_dir,'Stims','stim_time_{}.html'.format(segment))
+    outname = os.path.join(monitor_dir,
+                           'Stims',
+                           'stim_time_{}.html'.format(segment))
     remove_if_there(outname)
     output_file(outname)
 
-    #-- Connect to DB
+    # Connect to DB
     database = get_database()
     database.connect()
 
-    #-- Set height and width.
+    # Set height and width.
     plt_wth = 600
     plt_hgt = 500
 
     #data = Stims.select().where(Stims.segment==segment)
     col_names = ['stim1_x', 'stim1_y', 'stim2_x', 'stim2_y']
-    titles = ['Upper Left, X', 'Upper Left, Y', 'Lower Right, X', 'Lower Right, Y']
+    titles = ['Upper Left, X', 'Upper Left, Y', 'Lower Right, X',
+              'Lower Right, Y']
     
     ylims = {'FUVA':{'stim1_x': [390, 425],
                      'stim1_y': [950, 990],
@@ -491,9 +498,14 @@ def make_time_plot(segment, web_app=False):
         time = [row['abs_time'] for row in query]
         stims = [row[stim] for row in query]
 
-        p = figure(width=plt_wth, height=plt_hgt, x_range=Range1d(54900, max(time)+100), y_range=Range1d(ylims[segment][stim][0], ylims[segment][stim][1]), title='{} {} Stim'.format(segment, titles[stim_loc]))
+        p = figure(width=plt_wth, height=plt_hgt, 
+                   x_range=Range1d(54900, max(time)+100), 
+                   y_range=Range1d(ylims[segment][stim][0], 
+                                   ylims[segment][stim][1]), 
+                   title='{} {} Stim'.format(segment, titles[stim_loc]))
         p.title.text_font_size = '15pt'
-        p.circle(time, stims, legend='Stim Pulse Location',size=4, name='data_scatter', color="black", alpha=0.5)
+        p.circle(time, stims, legend='Stim Pulse Location',size=4, 
+                 name='data_scatter', color="black", alpha=0.5)
         p.xaxis.axis_label = 'Time (MJD)'
         p.yaxis.axis_label = titles[stim_loc] + ' (Pixels)'
         p.xaxis.axis_label_text_font_size = "13pt"
@@ -505,12 +517,13 @@ def make_time_plot(segment, web_app=False):
     
     full_plot = gridplot([[panels[0], panels[1]], [panels[2], panels[3]]])
     
-    #-- Logic for web app.
+    # Logic for web app.
     if web_app:
         return full_plot
     else:
         save(full_plot, filename=outname)
-#-------------------------------------------------------------------------------
+
+
 def make_stretch_panel(segment, left_stim, right_stim, reverse_stims=False):
     """Make plotting panel of stim 'stretch' in x or y.
 
@@ -530,11 +543,11 @@ def make_stretch_panel(segment, left_stim, right_stim, reverse_stims=False):
     p: bokeh panel
         Panel containing scatter of stretch vs. time
     """
-    #-- Connect to DB
+    # Connect to DB
     database = get_database()
     database.connect()
 
-    #-- Set height and width.
+    # Set height and width.
     plt_wth = 600
     plt_hgt = 500
 
@@ -557,18 +570,23 @@ def make_stretch_panel(segment, left_stim, right_stim, reverse_stims=False):
                  'FUVB': [15560, 15700]}
         label_str = '(Stim 2 x) - (Stim 1 x)'
 
-    p = figure(width=plt_wth, height=plt_hgt, x_range=Range1d(54900, max(time)+100), y_range=Range1d(ylims[segment][0], ylims[segment][1]), title='{} {}'.format(segment, label_str))
+    p = figure(width=plt_wth, height=plt_hgt, 
+               x_range=Range1d(54900, max(time)+100), 
+               y_range=Range1d(ylims[segment][0], 
+                               ylims[segment][1]), 
+               title='{} {}'.format(segment, label_str))
     p.title.text_font_size = '15pt'
-    p.circle(time, stretch, legend='Stretch (Pixels)',size=4, name='data_scatter', color="black", alpha=0.5)
+    p.circle(time, stretch, legend='Stretch (Pixels)',size=4, 
+             name='data_scatter', color="black", alpha=0.5)
     p.xaxis.axis_label = 'Time (MJD)'
     p.yaxis.axis_label = 'Stretch'
     p.xaxis.axis_label_text_font_size = "13pt"
     p.yaxis.axis_label_text_font_size = "13pt"
 
     return p
-#-------------------------------------------------------------------------------
 
-def interactive_plotting(path=None, filename=None, position=False, time=False, stretch=False):
+
+def interactive_plotting(path=None, filename=None, position=False,time=False, stretch=False):
     """Make interactive Bokeh Figures
 
     Parameters
@@ -585,7 +603,7 @@ def interactive_plotting(path=None, filename=None, position=False, time=False, s
         remove_if_there(outname)
         output_file(outname) 
         
-        #-- FUV Panels x vs. y
+        # FUV Panels x vs. y
         FUVA_upper = make_position_panel('FUVA', 'upper')
         FUVA_lower = make_position_panel('FUVA', 'lower')
         FUVB_upper = make_position_panel('FUVB', 'upper')
@@ -596,7 +614,7 @@ def interactive_plotting(path=None, filename=None, position=False, time=False, s
         save(p, filename=outname)
     
     if time:
-        #-- FUV stim x and y pos vs time.
+        # FUV stim x and y pos vs time.
         make_time_plot('FUVA')
         make_time_plot('FUVB')  
 
@@ -607,22 +625,23 @@ def interactive_plotting(path=None, filename=None, position=False, time=False, s
         
         #-- FUV Panels x vs. y
         FUVA_x_stretch = make_stretch_panel('FUVA', 'stim1_x', 'stim2_x')
-        FUVA_y_stretch = make_stretch_panel('FUVA', 'stim1_y', 'stim2_y', reverse_stims=True)
+        FUVA_y_stretch = make_stretch_panel('FUVA', 'stim1_y', 'stim2_y', 
+                                            reverse_stims=True)
         FUVB_x_stretch = make_stretch_panel('FUVB', 'stim1_x', 'stim2_x')
-        FUVB_y_stretch = make_stretch_panel('FUVB', 'stim1_y', 'stim2_y', reverse_stims=True)
+        FUVB_y_stretch = make_stretch_panel('FUVB', 'stim1_y', 'stim2_y', 
+                                            reverse_stims=True)
         
-        p = gridplot([[FUVA_x_stretch, FUVA_y_stretch], [FUVB_x_stretch, FUVB_y_stretch]])
+        p = gridplot([[FUVA_x_stretch, FUVA_y_stretch], 
+                      [FUVB_x_stretch, FUVB_y_stretch]])
 
         save(p, filename=outname)
-#-------------------------------------------------------------------------------
+
+
 def make_plots(out_dir, connection_string):
     """Make the overall STIM monitor plots.
     They will all be output to out_dir.
     """
-
-    #--------------------------------------------------------------------------
-    #-- Plot x,y positions
-    #--------------------------------------------------------------------------
+    # Plot x,y positions
 
     plt.ioff()
 
@@ -642,19 +661,9 @@ def make_plots(out_dir, connection_string):
     plt.figure(1, figsize=(18, 12))
     plt.grid(True)
 
-    #-- stim1_x, stim1_y FUVA
-    # data = engine.execute("""SELECT stim1_x, stim1_y
-    #                                 FROM stims
-    #                                 JOIN headers on stims.rootname = headers.rootname
-    #                                 WHERE headers.segment = 'FUVA' AND
-    #                                     stims.stim1_x != -999 AND
-    #                                     stims.stim1_y != -999 AND
-    #                                     stims.stim2_x != -999 AND
-    #                                     stims.stim2_y != -999;""")
-
     data = Stims.select().where(Stims.segment=='FUVA')
     
-    #-- plotting boundaries to match the interactive plots.
+    # plotting boundaries to match the interactive plots.
     x_range_min, x_range_max = 250, 530
     y_range_min, y_range_max = 940, 1030
 
@@ -667,7 +676,8 @@ def make_plots(out_dir, connection_string):
     plt.ylim([y_range_min, y_range_max])
     plt.xlabel('x', fontsize=label_fontsize, fontweight='bold')
     plt.ylabel('y', fontsize=label_fontsize, fontweight='bold')
-    plt.title('Segment A: Stim A (Upper Left)', fontsize=label_fontsize, fontweight='bold')
+    plt.title('Segment A: Stim A (Upper Left)', 
+              fontsize=label_fontsize, fontweight='bold')
     xcenter = brf[0]['SX1']
     ycenter = brf[0]['SY1']
     xwidth = brf[0]['XWIDTH']
@@ -686,19 +696,7 @@ def make_plots(out_dir, connection_string):
     plt.legend(shadow=True, numpoints=1)
     plt.xlabel('RAWX')
     plt.ylabel('RAWY')
-    #plt.set_xlims(xcenter - 2*xwidth, xcenter + 2*xwidth)
-    #plt.set_ylims(ycenter - 2*ywidth, ycenter - 2*ywidth)
-
-    #-- stim2_x, stim2_y FUVA
-    # data = engine.execute("""SELECT stim2_x, stim2_y
-    #                                 FROM stims
-    #                                 JOIN headers on stims.rootname = headers.rootname
-    #                                 WHERE headers.segment = 'FUVA' AND
-    #                                     stims.stim1_x != -999 AND
-    #                                     stims.stim1_y != -999 AND
-    #                                     stims.stim2_x != -999 AND
-    #                                     stims.stim2_y != -999;""")
-
+    
     data = Stims.select().where(Stims.segment=='FUVA')
 
     x_range_min, x_range_max = 15860, 16140
@@ -713,7 +711,8 @@ def make_plots(out_dir, connection_string):
     plt.ylim([y_range_min, y_range_max])
     plt.xlabel('x', fontsize=label_fontsize, fontweight='bold')
     plt.ylabel('y', fontsize=label_fontsize, fontweight='bold')
-    plt.title('Segment A: Stim B (Lower Right)', fontsize=label_fontsize, fontweight='bold')
+    plt.title('Segment A: Stim B (Lower Right)', fontsize=label_fontsize, 
+              fontweight='bold')
     xcenter = brf[0]['SX2']
     ycenter = brf[0]['SY2']
     xwidth = brf[0]['XWIDTH']
@@ -733,16 +732,6 @@ def make_plots(out_dir, connection_string):
     plt.xlabel('RAWX')
     plt.ylabel('RAWY')
 
-    #-- stim1_x stim1_y FUVB
-    # data = engine.execute("""SELECT stim1_x, stim1_y
-    #                                 FROM stims
-    #                                 JOIN headers on stims.rootname = headers.rootname
-    #                                 WHERE headers.segment = 'FUVB' AND
-    #                                     stims.stim1_x != -999 AND
-    #                                     stims.stim1_y != -999 AND
-    #                                     stims.stim2_x != -999 AND
-    #                                     stims.stim2_y != -999;""")
-
     data = Stims.select().where(Stims.segment=='FUVB')
     
     x_range_min, x_range_max = 320, 460
@@ -757,7 +746,8 @@ def make_plots(out_dir, connection_string):
     plt.ylim([y_range_min, y_range_max])
     plt.xlabel('x', fontsize=label_fontsize, fontweight='bold')
     plt.ylabel('y', fontsize=label_fontsize, fontweight='bold')
-    plt.title('Segment B: Stim A (Upper Left)', fontsize=label_fontsize, fontweight='bold')
+    plt.title('Segment B: Stim A (Upper Left)', fontsize=label_fontsize, 
+              fontweight='bold')
     xcenter = brf[1]['SX1']
     ycenter = brf[1]['SY1']
     xwidth = brf[1]['XWIDTH']
@@ -777,16 +767,6 @@ def make_plots(out_dir, connection_string):
     plt.xlabel('RAWX')
     plt.ylabel('RAWY')
 
-    #-- stim2_x stim2_y FUVB
-    # data = engine.execute("""SELECT stim2_x, stim2_y
-    #                                 FROM stims
-    #                                 JOIN headers on stims.rootname = headers.rootname
-    #                                 WHERE headers.segment = 'FUVB' AND
-    #                                     stims.stim1_x != -999 AND
-    #                                     stims.stim1_y != -999 AND
-    #                                     stims.stim2_x != -999 AND
-    #                                     stims.stim2_y != -999;""")
-    
     data = Stims.select().where(Stims.segment=='FUVB')
 
     x_range_min, x_range_max = 15920, 16080
@@ -801,7 +781,8 @@ def make_plots(out_dir, connection_string):
     plt.ylim([y_range_min, y_range_max])
     plt.xlabel('x', fontsize=label_fontsize, fontweight='bold')
     plt.ylabel('y', fontsize=label_fontsize, fontweight='bold')
-    plt.title('Segment B: Stim B (Lower Right)', fontsize=label_fontsize, fontweight='bold')
+    plt.title('Segment B: Stim B (Lower Right)', fontsize=label_fontsize, 
+               fontweight='bold')
     xcenter = brf[1]['SX2']
     ycenter = brf[1]['SY2']
     xwidth = brf[1]['XWIDTH']
@@ -823,15 +804,14 @@ def make_plots(out_dir, connection_string):
 
     plt.draw()
     remove_if_there(os.path.join(out_dir, 'STIM_locations.png'))
-    plt.savefig(os.path.join(out_dir, 'STIM_locations.png'),bbox_inches='tight')
+    plt.savefig(os.path.join(out_dir, 'STIM_locations.png'), 
+                bbox_inches='tight')
     plt.close(1)
     os.chmod(os.path.join(out_dir, 'STIM_locations.png'),0o766)
 
     plt.close()
 
-    #--------------------------------------------------------------------------
-    #-- Plot VS Time
-    #--------------------------------------------------------------------------
+    # Plot VS Time
 
     ylims = {'FUVA':{'stim1_x': [390, 425],
                      'stim1_y': [950, 990],
@@ -844,10 +824,12 @@ def make_plots(out_dir, connection_string):
 
     for segment in ['FUVA', 'FUVB']:
         fig = plt.figure(2, figsize=(35, 20))
-        fig.suptitle('%s coordinate locations with time' % (segment), fontsize=label_fontsize + 5, fontweight='bold')
+        fig.suptitle('%s coordinate locations with time' % (segment), 
+                     fontsize=label_fontsize + 5, fontweight='bold')
 
         col_names = ['stim1_x', 'stim1_y', 'stim2_x', 'stim2_y']
-        titles = ['Upper Left, X', 'Upper Left, Y', 'Lower Right, X', 'Lower Right, Y']
+        titles = ['Upper Left, X', 'Upper Left, Y', 'Lower Right, X',
+                  'Lower Right, Y']
 
         for i, (column, title) in enumerate(zip(col_names, titles)):
             query = list(Stims.raw("""SELECT * 
@@ -860,7 +842,8 @@ def make_plots(out_dir, connection_string):
             ax = fig.add_subplot(2, 2, i + 1)
             ax.set_title(title, fontsize=label_fontsize, fontweight='bold')
             ax.set_xlabel('MJD', fontsize=label_fontsize, fontweight='bold')
-            ax.set_ylabel('Coordinate', fontsize=label_fontsize, fontweight='bold')
+            ax.set_ylabel('Coordinate', fontsize=label_fontsize, 
+                          fontweight='bold')
             y_min, y_max = ylims[segment][column] 
             x_min, x_max = 54900, max(time)+100
             ax.set_xlim([x_min, x_max])
@@ -869,23 +852,29 @@ def make_plots(out_dir, connection_string):
             ax.grid()
             ax.plot(time, stims, 'o', c='k', alpha=0.3)
 
-            remove_if_there(os.path.join(out_dir, 'STIM_locations_vs_time_%s.png' %
+            remove_if_there(os.path.join(out_dir, 
+                                         'STIM_locations_vs_time_%s.png' %
                                                                     (segment)))
-            fig.savefig(os.path.join(out_dir, 'STIM_locations_vs_time_%s.png' %
-                                                                        (segment)),bbox_inches='tight')
+            fig.savefig(os.path.join(out_dir, 
+                                     'STIM_locations_vs_time_%s.png' %
+                                                                    (segment)),
+                        bbox_inches='tight')
+            
             plt.close(fig)
-            os.chmod(os.path.join(out_dir, 'STIM_locations_vs_time_%s.png' %
-                                                                        (segment)),0o766)
+            os.chmod(os.path.join(out_dir, 
+                                  'STIM_locations_vs_time_%s.png' %
+                                                                  (segment)),
+                                                                  0o766)
         
         plt.close()
 
-    #--------------------------------------------------------------------------
-    #-- Plot Stretch and Midpoint
-    #--------------------------------------------------------------------------
+    # Plot Stretch and Midpoint
 
     for segment in ['FUVA', 'FUVB']:
         fig = plt.figure(2, figsize=(35, 20))
-        fig.suptitle('%s Stretch and Midpoint' % (segment), fontsize=label_fontsize + 5, fontweight='bold')
+        fig.suptitle('%s Stretch and Midpoint' % (segment), 
+                     fontsize=label_fontsize + 5, 
+                     fontweight='bold')
         query = list(Stims.select().where(Stims.segment==segment).dicts())
         
         time = [row['abs_time'] for row in query]
@@ -921,7 +910,8 @@ def make_plots(out_dir, connection_string):
             ax2.set_ylim([8200, 8235])
         
         ax2.set_xlabel('MJD', fontsize=label_fontsize, fontweight='bold')
-        ax2.set_ylabel('Midpoint X', fontsize=label_fontsize, fontweight='bold')
+        ax2.set_ylabel('Midpoint X', fontsize=label_fontsize, 
+                       fontweight='bold')
 
 
         ax3 = fig.add_subplot(2, 2, 3)
@@ -950,10 +940,9 @@ def make_plots(out_dir, connection_string):
             ax4.set_ylim([465, 520])
 
         ax4.set_xlabel('MJD', fontsize=label_fontsize, fontweight='bold')
-        ax4.set_ylabel('Midpoint Y', fontsize=label_fontsize, fontweight='bold')
+        ax4.set_ylabel('Midpoint Y', fontsize=label_fontsize, 
+                       fontweight='bold')
         
-        plt.show()
-
         remove_if_there(os.path.join(out_dir, 'STIM_stretch_vs_time_%s.png' %
                                     (segment)))
         fig.savefig(os.path.join(out_dir, 'STIM_stretch_vs_time_%s.png' %
@@ -965,245 +954,7 @@ def make_plots(out_dir, connection_string):
         plt.close()
     
     database.close()
-    # ------------------------#
-    # strech and midpoint     #
-    # ------------------------#
-    # for segment in ['FUVA', 'FUVB']:
-    #     fig = plt.figure(figsize=(18, 12))
-    #     fig.suptitle("Strech and Midpoint vs time")
-
-    #     ax1 = fig.add_subplot(2, 2, 1)
-    #     query = """SELECT stims.abs_time, stims.stim2_x - stims.stim1_x as stretch
-    #                       FROM stims
-    #                       JOIN headers ON stims.rootname = headers.rootname
-    #                       WHERE headers.segment = '{}' AND
-    #                           stims.stim1_x != -999 AND
-    #                           stims.stim1_y != -999 AND
-    #                           stims.stim2_x != -999 AND
-    #                           stims.stim2_y != -999;""".format(segment)
-    #     data = [line for line in engine.execute(query)]
-    #     stretch = [line.stretch for line in data]
-    #     times = [line.abs_time for line in data]
-
-    #     ax1.plot(times, stretch, 'o')
-    #     ax1.set_xlabel('MJD')
-    #     ax1.set_ylabel('Stretch X')
-
-    #     ax2 = fig.add_subplot(2, 2, 2)
-    #     query = """SELECT stims.abs_time, .5*(stims.stim2_x + stims.stim1_x) as midpoint
-    #                       FROM stims
-    #                       JOIN headers ON stims.rootname = headers.rootname
-    #                       WHERE headers.segment = '{}' AND
-    #                           stims.stim1_x != -999 AND
-    #                           stims.stim1_y != -999 AND
-    #                           stims.stim2_x != -999 AND
-    #                           stims.stim2_y != -999;""".format(segment)
-    #     data = [line for line in engine.execute(query)]
-    #     midpoint = [line.midpoint for line in data]
-    #     times = [line.abs_time for line in data]
-
-    #     ax2.plot(times, midpoint, 'o')
-    #     ax2.set_xlabel('MJD')
-    #     ax2.set_ylabel('Midpoint X')
-
-    #     ax3 = fig.add_subplot(2, 2, 3)
-    #     query = """SELECT stims.abs_time, stims.stim2_y - stims.stim1_y as stretch
-    #                       FROM stims
-    #                       JOIN headers ON stims.rootname = headers.rootname
-    #                       WHERE headers.segment = '{}' AND
-    #                           stims.stim1_x != -999 AND
-    #                           stims.stim1_y != -999 AND
-    #                           stims.stim2_x != -999 AND
-    #                           stims.stim2_y != -999;""".format(segment)
-    #     data = [line for line in engine.execute(query)]
-    #     stretch = [line.stretch for line in data]
-    #     times = [line.abs_time for line in data]
-    #     ax3.plot(times, stretch, 'o')
-    #     ax3.set_xlabel('MJD')
-    #     ax3.set_ylabel('Stretch Y')
-
-    #     ax4 = fig.add_subplot(2, 2, 4)
-    #     query = """SELECT stims.abs_time, .5*(stims.stim2_y + stims.stim1_y) as midpoint
-    #                       FROM stims
-    #                       JOIN headers ON stims.rootname = headers.rootname
-    #                       WHERE headers.segment = '{}' AND
-    #                           stims.stim1_x != -999 AND
-    #                           stims.stim1_y != -999 AND
-    #                           stims.stim2_x != -999 AND
-    #                           stims.stim2_y != -999;""".format(segment)
-    #     ax4.plot(times, midpoint, 'o')
-    #     ax4.set_xlabel('MJD')
-    #     ax4.set_ylabel('Midpoint Y')
-    #     remove_if_there(os.path.join(out_dir, 'STIM_stretch_vs_time_%s.png' %
-    #                  (segment)))
-    #     fig.savefig(
-    #         os.path.join(out_dir, 'STIM_stretch_vs_time_%s.png' %
-    #                      (segment)))
-    #     plt.close(fig)
-    #     os.chmod(os.path.join(out_dir, 'STIM_stretch_vs_time_%s.png' %
-    #                  (segment)),0o766)
-
-    # fig = plt.figure(1, figsize=(18, 12))
-    # ax = fig.add_subplot(2, 2, 1)
-    # ax.grid(True)
-
-    # data = engine.execute("""SELECT stim1_x, stim2_x
-    #                                 FROM stims
-    #                                 JOIN headers on stims.rootname = headers.rootname
-    #                                 WHERE headers.segment = 'FUVA' AND
-    #                                     stims.stim1_x != -999 AND
-    #                                     stims.stim1_y != -999 AND
-    #                                     stims.stim2_x != -999 AND
-    #                                     stims.stim2_y != -999;""")
-    # data = [line for line in data]
-
-    # x1 = [float(line.stim1_x) for line in data]
-    # x2 = [float(line.stim2_x) for line in data]
-
-    # im, nothin1, nothin2 = np.histogram2d(x2, x1, bins=200)  ##reverse coords
-    # im = np.log(im)
-    # ax.imshow(im, aspect='auto', interpolation='none')
-    # ax.set_xlabel('x1')
-    # ax.set_ylabel('x2')
-    # ax.set_title('Segment A: X vs X')
-
-
-
-    # ax = fig.add_subplot(2, 2, 2)
-    # ax.grid(True)
-
-    # data = engine.execute("""SELECT stim1_y, stim2_y
-    #                                 FROM stims
-    #                                 JOIN headers on stims.rootname = headers.rootname
-    #                                 WHERE headers.segment = 'FUVA' AND
-    #                                     stims.stim1_x != -999 AND
-    #                                     stims.stim1_y != -999 AND
-    #                                     stims.stim2_x != -999 AND
-    #                                     stims.stim2_y != -999;""")
-    # data = [line for line in data]
-
-    # y1 = [float(line.stim1_y) for line in data]
-    # y2 = [float(line.stim2_y) for line in data]
-
-    # im, nothin1, nothin2 = np.histogram2d(y2, y1, bins=200)
-    # im = np.log(im)
-    # ax.imshow(im, aspect='auto', interpolation='none')
-    # ax.set_xlabel('y1')
-    # ax.set_ylabel('y2')
-    # ax.set_title('Segment A: Y vs Y')
-
-
-
-    # ax = fig.add_subplot(2, 2, 3)
-    # ax.grid(True)
-
-    # data = engine.execute("""SELECT stim1_x, stim2_x
-    #                                     FROM stims
-    #                                     JOIN headers on stims.rootname = headers.rootname
-    #                                     WHERE headers.segment = 'FUVB' AND
-    #                                         stims.stim1_x != -999 AND
-    #                                         stims.stim1_y != -999 AND
-    #                                         stims.stim2_x != -999 AND
-    #                                         stims.stim2_y != -999;""")
-    # data = [line for line in data]
-
-    # x1 = [float(line.stim1_x) for line in data]
-    # x2 = [float(line.stim2_x) for line in data]
-
-    # im, nothin1, nothin2 = np.histogram2d(x2, x1, bins=200)
-    # im = np.log(im)
-    # ax.imshow(im, aspect='auto', interpolation='none')
-    # ax.set_xlabel('x1')
-    # ax.set_ylabel('x2')
-    # ax.set_title('Segment B: X vs X')
-
-
-
-    # ax = fig.add_subplot(2, 2, 4)
-    # ax.grid(True)
-
-    # data = engine.execute("""SELECT stim1_y, stim2_y
-    #                                     FROM stims
-    #                                     JOIN headers on stims.rootname = headers.rootname
-    #                                     WHERE headers.segment = 'FUVB' AND
-    #                                         stims.stim1_x != -999 AND
-    #                                         stims.stim1_y != -999 AND
-    #                                         stims.stim2_x != -999 AND
-    #                                         stims.stim2_y != -999;""")
-    # data = [line for line in data]
-
-    # y1 = [float(line.stim1_y) for line in data]
-    # y2 = [float(line.stim2_y) for line in data]
-
-    # im, nothin1, nothin2 = np.histogram2d(y2, y1, bins=200)
-    # im = np.log(im)
-    # ax.imshow(im, aspect='auto', interpolation='none')
-    # ax.set_xlabel('y1')
-    # ax.set_ylabel('y2')
-    # ax.set_title('Segment B: Y vs Y')
-
-    # #fig.colorbar(colors)
-    # fig.savefig(os.path.join(out_dir, 'STIM_coord_relations_density.png'))
-    # plt.close(fig)
-
-
-    """
-    print 1
-    fig = plt.figure(1, figsize=(18, 12))
-    ax = fig.add_subplot(2, 2, 1, projection='3d')
-    ax.grid(True)
-    x1 = [line[3] for line in data if '_a.fits' in line[0]]
-    x2 = [line[5] for line in data if '_a.fits' in line[0]]
-    times = [line[1] for line in data if '_a.fits' in line[0]]
-    ax.scatter(x1, x2, times, s=5, c=times, alpha=.5, edgecolors='none')
-    ax.set_xlabel('x1')
-    ax.set_ylabel('x2')
-    ax.set_title('Segment A: X vs X')
-    print 2
-    ax = fig.add_subplot(2, 2, 2, projection='3d')
-    ax.grid(True)
-    y1 = [line[4] for line in data if '_a.fits' in line[0]]
-    y2 = [line[6] for line in data if '_a.fits' in line[0]]
-    times = [line[1] for line in data if '_a.fits' in line[0]]
-    ax.scatter(y1, y2, times, s=5, c=times, alpha=.5, edgecolors='none')
-    slope, intercept = trend(y1, y2)
-    print slope, intercept
-    #plt.plot( [min(y1), max(y1)], [slope*min(y1)+intercept, slope*max(y1)+intercept], 'y--', lw=3)
-    ax.set_xlabel('y1')
-    ax.set_ylabel('y2')
-    ax.set_title('Segment A: Y vs Y')
-    print 3
-    ax = fig.add_subplot(2, 2, 3, projection='3d')
-    ax.grid(True)
-    x1 = [line[3] for line in data if '_b.fits' in line[0]]
-    x2 = [line[5] for line in data if '_b.fits' in line[0]]
-    times = [line[1] for line in data if '_b.fits' in line[0]]
-    ax.scatter(x1, x2, times, s=5, c=times, alpha=.5, edgecolors='none')
-    ax.set_xlabel('x1')
-    ax.set_ylabel('x2')
-    ax.set_title('Segment B: X vs X')
-    print 4
-    ax = fig.add_subplot(2, 2, 4, projection='3d')
-    ax.grid(True)
-    y1 = [line[4] for line in data if '_b.fits' in line[0]]
-    y2 = [line[6] for line in data if '_b.fits' in line[0]]
-    times = [line[1] for line in data if '_b.fits' in line[0]]
-    colors = ax.scatter(y1, y2, times, s=5, c=times, alpha=.5, edgecolors='none')
-    slope, intercept = trend(y1, y2)
-    print slope, intercept
-    #plt.plot( [min(y1), max(y1)], [slope*min(y1)+intercept, slope*max(y1)+intercept], 'y--', lw=3)
-    ax.set_xlabel('y1')
-    ax.set_ylabel('y2')
-    ax.set_title('Segment B: Y vs Y')
-    fig.subplots_adjust(right=0.8)
-    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-    cbar_ax.set_title('MJD')
-    fig.colorbar(colors, cax=cbar_ax)
-    fig.savefig(os.path.join(out_dir, 'STIM_coord_relations_time.png'))
-    plt.close(fig)
-    """
-
-#-------------------------------------------------------------------------------
+    
 
 def stim_monitor():
     """Main function to monitor the stim pulses in COS observations
@@ -1227,16 +978,18 @@ def stim_monitor():
     logger.info("MAKING STATIC PLOTS")
     make_plots(monitor_dir, settings['connection_string'])
 
-    #-- Move plots pngs to webpage dir
+    # Move plots pngs to webpage dir
     for item in glob.glob(os.path.join(monitor_dir, '*.p??')):
         remove_if_there(os.path.join(webpage_dir, os.path.basename(item)))
         shutil.copy(item, webpage_dir)
 
-    # logger.info("MAKING INTERACTIVE PLOTS")
-    # interactive_plotting(path=monitor_dir, filename='stim_location.html', position=True)
-    # logger.info("POSITION DONE")
-    # interactive_plotting(time=True)
-    # logger.info("TIME DONE")
-    # interactive_plotting(path=monitor_dir, filename='stim_stretch.html', stretch=True)
-    # logger.info("STRETCH DONE")
-    # logger.info("FINISH MONITOR")
+    logger.info("MAKING INTERACTIVE PLOTS")
+    interactive_plotting(path=monitor_dir, filename='stim_location.html', 
+                         position=True)
+    logger.info("POSITION DONE")
+    interactive_plotting(time=True)
+    logger.info("TIME DONE")
+    interactive_plotting(path=monitor_dir, filename='stim_stretch.html', 
+                         stretch=True)
+    logger.info("STRETCH DONE")
+    logger.info("FINISH MONITOR")

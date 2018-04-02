@@ -1,5 +1,4 @@
-"""
-Create periodogram of COS FUV dark rate for a given time period.
+"""Create periodogram of COS FUV dark rate for a given time period.
 Trying to constrain the cause in the variation of the dark rate
 based off of periodogram.
 
@@ -28,10 +27,10 @@ from bokeh.plotting import figure
 import numpy as np
 
 from scipy.fftpack import fft
-#------------------------------------------------------------------------------
+
+
 def create_periodogram(x, y, outname):
-    """
-    Create periodogram based off of astropy's LombScagle method in stats
+    """Create periodogram based off of astropy's LombScagle method in stats
     library.
 
     Parameters
@@ -62,10 +61,9 @@ def create_periodogram(x, y, outname):
 
     save(p, filename=outname)
 
-#------------------------------------------------------------------------------
+
 def create_periodogram(x, y, outname):
-    """
-    Create periodogram based off of astropy's LombScagle method in stats
+    """Create periodogram based off of astropy's LombScagle method in stats
     library.
 
     Parameters
@@ -95,10 +93,10 @@ def create_periodogram(x, y, outname):
     p.yaxis.axis_label = "Power"
 
     save(p, filename=outname)
-#------------------------------------------------------------------------------
+
+
 def dark_query(start_date, end_date, segment):
-    """
-    Query the dark data in COSMO between two dates.
+    """Query the dark data in COSMO between two dates.
 
     Parameters
     ----------
@@ -117,24 +115,24 @@ def dark_query(start_date, end_date, segment):
     database = get_database()
     database.connect()
 
-    data = Darks.select().order_by(Darks.date).where(
-                                                     (Darks.date >= start_date) &
-                                                     (Darks.date <= end_date) &
-                                                     (Darks.detector == segment)
-                                                    )
+    data = Darks.select().order_by(Darks.date)\
+                            .where(
+                                   (Darks.date >= start_date)
+                                   & (Darks.date <= end_date)
+                                   & (Darks.detector == segment))
      
     date = Time([row.date for row in data], format='jyear').seconds
     dark = [row.dark for row in data]
     print(date.max()-date.min())
     return date, dark 
-#------------------------------------------------------------------------------
+
+
 def main():
-    """
-    Main driver.
+    """Main driver.
     """
     settings = get_settings()
     for segment in ['FUVA', 'FUVB']:
-        out_dir = os.path.join(settings['monitor_location'], 'Darks', 'FUV', 'dark_periodicty_{}.html'.format(segment))
+        out_dir = os.path.join(settings['monitor_location'], 'Darks', 'FUV', 
+                               'dark_periodicty_{}.html'.format(segment))
         date, dark = dark_query(2016, 2018, segment)
         create_periodogram(date, dark, out_dir)
-#------------------------------------------------------------------------------

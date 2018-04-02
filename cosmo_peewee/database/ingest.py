@@ -150,18 +150,22 @@ def bulk_delete(all_files):
     """
 
     # Combine tuples of path and filenames to check for existance....
-    combined_paths = [os.path.join(path, filename) for (path, filename) in all_files]
+    combined_paths = [os.path.join(path, filename) 
+                      for (path, filename) in all_files]
 
     # Not the prettiest thing in the whole world....
-    files_to_remove = [os.path.basename(full_path) for full_path in combined_paths if not os.path.exists(full_path)]
+    files_to_remove = [os.path.basename(full_path) 
+                       for full_path in combined_paths 
+                       if not os.path.exists(full_path)]
     logger.info('FOUND {} FILES TO DELETE!'.format(len(files_to_remove)))
 
     database = get_database()
     database.connect()
 
     # Crude implimentation but right now it works.
-    # Delete instances of files in DB that don't exist in files and observations tables.
-    # This makes sure that the most up to date files in DB are ingested.    
+    # Delete instances of files in DB that don't exist in files and 
+    # observations tables. This makes sure that the most up to date 
+    # files in DB are ingested.    
     for f in files_to_remove:
         logger.info("DELETING INSTANCES OF {}".format(f))
         
@@ -640,7 +644,8 @@ def ingest_all():
               Jitter,
               Gain_Trends]
 
-    # Safe checks existance of tables first to make sure they dont get clobbered.
+    # Safe checks existance of tables first to make sure they dont get 
+    # clobbered.
     database.create_tables(tables, safe=True)
     
     # Close DB connection.
@@ -732,7 +737,8 @@ def run_monitors():
     settings = get_settings()
     setup_logging()
     
-    osm_monitor()
+    # osm_monitor()
     # dark_monitor()
-    # stim_monitor()
-    # cci_main(os.path.join(settings['monitor_location'], 'CCI'), hotspot_filter=True)
+    stim_monitor()
+    # cci_main(os.path.join(settings['monitor_location'], 'CCI'), 
+    #          hotspot_filter=True)

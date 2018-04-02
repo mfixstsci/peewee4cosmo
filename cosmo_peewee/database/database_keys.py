@@ -1,7 +1,10 @@
+"""Open pull and return header keywords for specific tables.
+"""
+
 import os
 from astropy.io import fits
 
-#-------------------------------------------------------------------------------
+
 def nuv_corr_keys(file_result):
     """Keys for COS NUV corrtags
     
@@ -38,7 +41,6 @@ def nuv_corr_keys(file_result):
                         }
     return keywords
     
-#-------------------------------------------------------------------------------
 
 def fuva_raw_keys(file_result):
     """Keys for COS segment FUVA rawtags
@@ -62,7 +64,6 @@ def fuva_raw_keys(file_result):
                         }
     return keywords
 
-#-------------------------------------------------------------------------------
 
 def fuvb_raw_keys(file_result):
     """Keys for COS segment FUVB rawtags
@@ -86,7 +87,6 @@ def fuvb_raw_keys(file_result):
                         }
     return keywords
 
-#-------------------------------------------------------------------------------
 
 def fuva_corr_keys(file_result):
     """Keys for COS segment FUVA corrtags
@@ -113,7 +113,6 @@ def fuva_corr_keys(file_result):
                         }
     return keywords
 
-#-------------------------------------------------------------------------------
 
 def fuvb_corr_keys(file_result):
     """Keys for COS segment FUVB corrtags
@@ -140,7 +139,6 @@ def fuvb_corr_keys(file_result):
                         }
     return keywords
 
-#-------------------------------------------------------------------------------
 
 def obs_keys(file_result):
     """Keys for observations
@@ -188,12 +186,11 @@ def obs_keys(file_result):
                         }
     return keywords
 
-#-------------------------------------------------------------------------------
 
 def file_keys(file_result):
     """Keys and tests for all data entering the system. This is so we can track 
-    data files that have no data in them as well as avoid ingesting them into any
-    monitoring tables.
+    data files that have no data in them as well as avoid ingesting them into 
+    any monitoring tables.
     
     Parameters
     ----------
@@ -204,23 +201,23 @@ def file_keys(file_result):
     path, filename = file_result
     
     try:
-        #-- Set hard keys...
+        # Set hard keys...
         keywords = {'path': path,
-                    'filename': filename
-                    }        
-        #-- Open files to see if it opens or has data
+                    'filename': filename}
+
+        # Open files to see if it opens or has data
         with fits.open(os.path.join(path,filename)) as hdu:
             if not len(hdu[1].data):
                 keywords['monitor_flag'] = False
         
-        #-- Hey, looks like it opens and has data
+        # Hey, looks like it opens and has data
         keywords['monitor_flag'] = True
     
-    #-- Sorry, file won't open or doesn't have data...
-    except (IOError, TypeError, ValueError) as e:
+    # Sorry, file won't open or doesn't have data...
+    except (IOError, TypeError, ValueError):
         keywords['monitor_flag'] = False
     
-    #-- Add rootname to table
+    # Add rootname to table
     rootname = filename.split('_')[0]
     if not len(rootname) == 9:
         rootname = None
@@ -228,5 +225,3 @@ def file_keys(file_result):
     keywords['rootname'] = rootname
 
     return keywords 
-
-#-------------------------------------------------------------------------------

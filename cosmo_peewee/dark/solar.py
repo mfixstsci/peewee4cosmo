@@ -1,22 +1,21 @@
 """ Interface to the noaa site and grab daily 10.7 cm solar flux measurements
-
 """
 
 from __future__ import print_function, absolute_import, division
 
-from astropy.io import ascii
-import numpy as np
-import os
 import glob
+import os
+
+from astropy.io import ascii
+from astropy.time import Time
 from ftplib import FTP
 import logging
-logger = logging.getLogger(__name__)
-
-from astropy.time import Time
+import numpy as np
 
 from ..utils import remove_if_there
 
-#-------------------------------------------------------------------------------
+logger = logging.getLogger(__name__)
+
 
 def grab_solar_files(file_dir):
     """Pull solar data files from NOAA website
@@ -44,11 +43,11 @@ def grab_solar_files(file_dir):
             if year >= 2000:
                 logging.debug('Retrieving: {}'.format(item))
                 destination = os.path.join(file_dir, item)
-                ftp.retrbinary('RETR {}'.format(item), open(destination, 'wb').write)
+                ftp.retrbinary('RETR {}'.format(item), 
+                               open(destination, 'wb').write)
 
                 os.chmod(destination, 0o777)
 
-#-------------------------------------------------------------------------------
 
 def compile_txt(file_dir):
     """Pull desired columns from solar data text files
@@ -74,14 +73,14 @@ def compile_txt(file_dir):
     for item in input_list:
         logging.debug('Reading {}'.format(item))
 
-        #-- clean up Q4 files when year-long file exists
+        # clean up Q4 files when year-long file exists
         if ('Q4_' in item) and os.path.exists(item.replace('Q4_', '_')):
             logger.debug("Removing duplicate observations: {}".format(item))
             os.remove(item)
             continue
         
-        #-- astropy.ascii no longer returns an empty table for empty files
-        #-- Throws IndexError, we will go around it if empty.
+        # astropy.ascii no longer returns an empty table for empty files
+        # Throws IndexError, we will go around it if empty.
         try:
             data = ascii.read(item, data_start=1, comment='[#,:]')
         except IndexError:
@@ -101,10 +100,9 @@ def compile_txt(file_dir):
     
     return np.array(date), np.array(flux)
 
-#-------------------------------------------------------------------------------
 
 def get_solar_data(file_dir):
-    """ Compile the necessary solar data from NOAA
+    """Compile the necessary solar data from NOAA
 
     Parameters
     ----------
@@ -133,5 +131,3 @@ def get_solar_data(file_dir):
         for d, f in zip(date, flux):
             outfile.write('%4.5f  %d\n' % (d, f))
     os.chmod(out_solar_file, 0o777)
-
-#-------------------------------------------------------------------------------
