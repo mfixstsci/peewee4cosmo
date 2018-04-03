@@ -6,8 +6,6 @@ tables.
 from __future__ import print_function, absolute_import, division
 
 import os
-import sys
-import types
 
 import argparse
 from astropy.io import fits
@@ -19,6 +17,8 @@ import logging
 import multiprocessing as mp
 import numpy as np
 from peewee import *
+import sys
+import types
 
 from ..cci.gainmap import write_and_pull_gainmap
 from ..cci.gainsag import main as cci_main
@@ -739,6 +739,6 @@ def run_monitors():
     
     # osm_monitor()
     # dark_monitor()
-    stim_monitor()
-    # cci_main(os.path.join(settings['monitor_location'], 'CCI'), 
-    #          hotspot_filter=True)
+    # stim_monitor()
+    cci_main(os.path.join(settings['monitor_location'], 'CCI'), 
+             hotspot_filter=True)

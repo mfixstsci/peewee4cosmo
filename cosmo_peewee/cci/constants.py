@@ -25,7 +25,7 @@ __all__ = ['X_UNBINNED',
 X_UNBINNED = 16384
 Y_UNBINNED = 1024
 
-#-- Optimal pore size for COS 'super pixel'..
+# Optimal pore size for COS 'super pixel'..
 X_BINNING = 8
 Y_BINNING = 2  
 
