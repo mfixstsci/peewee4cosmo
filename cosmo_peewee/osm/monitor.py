@@ -90,7 +90,7 @@ def pull_flashes(filename):
     with fits.open(file_path) as hdu:
         # Set some dictionary values.
         out_info = {'filename': filename.filename,
-                    'date': hdu[1].header['EXPSTART'],
+                    'date': round(hdu[1].header['EXPSTART'],5),
                     'rootname': hdu[0].header['ROOTNAME'],
                     'proposid': hdu[0].header['PROPOSID'],
                     'detector': hdu[0].header['DETECTOR'],
@@ -1717,8 +1717,8 @@ def monitor():
     flash_data = make_shift_table(Lampflash)
     rawacq_data = make_shift_table(Rawacqs)
     
-    # ascii.write(flash_data, os.path.join(monitor_dir,'monitor_db_table.csv'), 
-    #             format='csv')
+    ascii.write(flash_data, os.path.join(monitor_dir,'monitor_db_table.csv'), 
+                format='csv', overwrite=True)
 
     # Make static plots.
     make_plots(flash_data, rawacq_data, monitor_dir)

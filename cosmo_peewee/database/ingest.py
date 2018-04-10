@@ -1,7 +1,5 @@
-"""Script to execute the ingestion of data into the COSMO DB 
-tables. 
+"""Prep and ingest data into database.
 """
-
 
 from __future__ import print_function, absolute_import, division
 
@@ -31,7 +29,7 @@ from ..dark.monitor import pull_orbital_info
 
 from .database_keys import nuv_corr_keys, fuva_raw_keys, fuvb_raw_keys
 from .database_keys import fuva_corr_keys, fuvb_corr_keys, obs_keys
-from .database_keys import file_keys
+from .database_keys import file_keys, hv_keys
 
 from ..filesystem import find_all_datasets
 
@@ -39,6 +37,7 @@ from .models import get_database, get_settings
 from .models import Files, NUV_corr_headers, FUVA_raw_headers, FUVB_raw_headers
 from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs
 from .models import Darks, Stims, Observations, Gain, Flagged_Pixels, Jitter
+from .models import Hv_Level
 
 from .models import Gain_Trends
 
@@ -48,18 +47,20 @@ from ..osm.monitor import monitor as osm_monitor
 from ..stims.monitor import locate_stims
 from ..stims.monitor import stim_monitor
 
+from ..hv_level import main as hvlvl_monitor
+
 logger = logging.getLogger(__name__)
 
 
 def bulk_insert(table, data_source, debug=False):
-    """Ingest data into database
+    """Add preprocessed data to DB tables.
 
     Parameters
     ----------
     table: Peewee table object
         Table that is going to be populated.
     data_source: list
-        A list full of dictionaries to be ingested.
+        A list full of dictionaries. Key=Column Name, Value=Value
 
     Returns
     -------
@@ -105,18 +106,14 @@ def bulk_insert(table, data_source, debug=False):
 
 
 def pull_data(file_result, function):
-    """This function inserts the rows into the data base. We use the partials
-    to add data quick using pool.map().
+    """Check and change data type to properly interact with DB.
 
     Parameters
     ----------
-    table : peewee table object
-        DB table you wish to ingest data into.
-    function : Function
+    file_result: str
+         Path to file to process
+    function: Function
         Function that extracts the metadata to insert
-    files : List
-        List of files you wish to extract metadata from.
-    
     """
 
     try:
@@ -133,7 +130,9 @@ def pull_data(file_result, function):
 
 
 def bulk_delete(all_files):
-    """This function is a temporary fix for /smov/cos/Data/. Since the 
+    """Check and delete old files
+    
+    This function is a temporary fix for /smov/cos/Data/. Since the 
     'date-string' in the file path changes, the database will try to 
     ingest the same files. The paths changes due to newly downlinked 
     data or when data is reprocessed using new reference files.
@@ -192,12 +191,12 @@ def setup_logging():
 
     """
     
-    #-- create the logging file handler
+    # create the logging file handler
     logging.basicConfig(filename="cosmos_monitors.log",
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                         level=logging.DEBUG)
 
-    #-- handler for STDOUT
+    # handler for STDOUT
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -206,13 +205,12 @@ def setup_logging():
 
 
 def populate_files(settings):
-    
     """Populate paths and files from filesystem.
     
     Parameters
     ----------
     settings : dictionary
-        A dictionary of credentials for database and monitors
+        A dictionary of credentials for database log in.
     
     Returns
     -------
@@ -280,7 +278,6 @@ def populate_tables(table, table_keys, search_str, num_cpu=2):
     Returns
     -------
     None
-
     """
 
     database = get_database()
@@ -407,7 +404,6 @@ def populate_darks(num_cpu=2):
     Returns
     -------
     None
-
     """
     
     database = get_database()
@@ -435,9 +431,6 @@ def populate_darks(num_cpu=2):
 
 def populate_stims(num_cpu=2):
     """Populate the stim pulse table
-    
-    None of the monitoring code has been integrated into the system yet.
-    Still working with the monitoring team to refactor monitor....
     
     Parameters
     ----------
@@ -519,8 +512,9 @@ def populate_gain(num_cpu=2):
 
 
 def find_flagged():
+    """Populate flagged pixel table
     
-    """Search the Gain table in cosmo for sagged pixels. Once located, 
+    Search the Gain table in cosmo for sagged pixels. Once located, 
     there can be multiple entries because the gain for a pixel can drop 
     below 3. We want the date that it went bad first, this will become 
     an entry in the Flagged_Pixel table.
@@ -545,21 +539,19 @@ def find_flagged():
     
     # Gain.y < 300 and Gain.y > 200 are counts in the spectral region.
     # Don't care about anything outside of that. 
-    all_coords = Gain.select().distinct().where(
-                                    (Gain.gain <= 3)
-                                    & (Gain.counts >= 30)
-                                    & (Gain.expstart > 55197)
-                                    & (Gain.y.between(
-                                        400//Y_BINNING, 600//Y_BINNING))
-                                    & (Gain.segment.in_(
-                                        Gain.select(
+    all_coords = (
+        Gain.select().distinct().where(
+                        (Gain.gain <= 3)
+                      & (Gain.counts >= 30)
+                      & (Gain.expstart > 55197)
+                      & (Gain.y.between(400//Y_BINNING, 600//Y_BINNING))
+                      & (Gain.segment.in_(Gain.select(
                                             Gain.segment).distinct()))
-                                    & (Gain.hv_lvl.in_(
-                                        Gain.select(
+                      & (Gain.hv_lvl.in_(Gain.select(
                                             Gain.hv_lvl).distinct()))
-                                    & (Gain.filename.not_in(
-                                        Flagged_Pixels.select(
-                                            Flagged_Pixels.filename)))).dicts()
+                      & (Gain.filename.not_in(Flagged_Pixels.select(
+                                    Flagged_Pixels.filename)))).dicts()
+                 )
     database.close()
 
     if len(all_coords):
@@ -595,6 +587,29 @@ def find_flagged():
         logger.info('NO NEW FLAGGED ENTRIES!')
 
 
+def populate_hv_level(num_cpu):
+    """
+    Populate high voltage level table
+    """
+    
+    settings = get_settings()
+    database = get_database()
+    database.connect()
+
+    files_to_add = Files.select().where(Files.filename.contains('%rawtag\_%.gz')
+                                        & Files.filename.not_in(
+                                            Hv_Level.select(Hv_Level.filename))
+                                        & Files.monitor_flag == True)
+
+    partial = functools.partial(pull_data,
+                                function=hv_keys)
+    
+    pool = mp.Pool(processes=num_cpu)
+    data_to_insert = pool.map(partial, files_to_add)
+
+    if len(data_to_insert): 
+        bulk_insert(Hv_Level, itertools.chain(*data_to_insert))
+    
 def ingest_all():
     """Create tables and run all ingestion scripts
     
@@ -642,7 +657,8 @@ def ingest_all():
               Gain,
               Flagged_Pixels,
               Jitter,
-              Gain_Trends]
+              Gain_Trends,
+              Hv_Level]
 
     # Safe checks existance of tables first to make sure they dont get 
     # clobbered.
@@ -665,8 +681,7 @@ def ingest_all():
                  '%rawaccum.fits.gz',
                  '%rawtag.fits.gz', 
                  '%rawtag_a.fits.gz', 
-                 '%rawtag_b.fits.gz'
-                 ]
+                 '%rawtag_b.fits.gz']
 
     for file_type in filetypes:
         populate_tables(Observations, obs_keys, file_type, settings['num_cpu'])
@@ -711,15 +726,20 @@ def ingest_all():
     logger.info("POPULATING GAIN TABLE")
     populate_gain(settings['num_cpu'])
     
-    # Populate flagged pixels table.
+    Populate flagged pixels table.
     logger.info("POPULATING FLAGGED PIXEL TABLE")
     find_flagged()
-
+    
+    # Work in progress
     # Populate flagged pixels table.
-    if date.today().weekday() == 0:
-        logger.info("POPULATING GAIN TRENDS TABLE")
-        time_trends()
+    # if date.today().weekday() == 0:
+    #     logger.info("POPULATING GAIN TRENDS TABLE")
+    #     time_trends()
 
+    logger.info("POPULATING HV LEVEL TABLE")
+    populate_hv_level(settings['num_cpu'])
+    
+    logger.info("INGESTION COMPLETE")
 
 def run_monitors():
     """Run all COS Monitors
@@ -731,14 +751,14 @@ def run_monitors():
     Returns
     -------
     None
-    
     """
 
     settings = get_settings()
     setup_logging()
     
-    # osm_monitor()
+    osm_monitor()
     # dark_monitor()
     # stim_monitor()
-    cci_main(os.path.join(settings['monitor_location'], 'CCI'), 
-             hotspot_filter=True)
+    # cci_main(os.path.join(settings['monitor_location'], 'CCI'), 
+    #          hotspot_filter=True)
+    hvlvl_monitor()

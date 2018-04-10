@@ -16,7 +16,6 @@ try:
 except ImportError:
     from .yaml import yaml
 
-#-------------------------------------------------------------------------------
 
 def get_settings(config_file=None):
     """ Parse config file and load settings
@@ -43,7 +42,7 @@ def get_settings(config_file=None):
         settings = yaml.load(f)
 
     return settings
-#-------------------------------------------------------------------------------
+
 
 def get_database(config_file=None):
     """ Open connection to database
@@ -71,14 +70,12 @@ def get_database(config_file=None):
                                    max_connections=30)
     return database
 
-#-------------------------------------------------------------------------------
 
 class BaseModel(Model):
     """A base model that will use our MySQL database"""
     class Meta:
         database = get_database()
 
-#-------------------------------------------------------------------------------
 
 class Files(BaseModel):
     """Main files table"""
@@ -90,7 +87,6 @@ class Files(BaseModel):
     class Meta:
         db_table = 'files'   
 
-#-------------------------------------------------------------------------------
 
 class Observations(BaseModel):
     """Observations table"""
@@ -126,7 +122,7 @@ class Observations(BaseModel):
   
     class Meta:
         db_table = 'observations'  
-#-------------------------------------------------------------------------------
+
 
 class NUV_corr_headers(BaseModel):
     """NUV Corrtag Header Table"""
@@ -162,7 +158,6 @@ class NUV_corr_headers(BaseModel):
     class Meta:
         db_table = 'nuv_corr_headers'
 
-#-------------------------------------------------------------------------------
 
 class FUVA_raw_headers(BaseModel):
     'Table of raw fuva data'
@@ -183,7 +178,6 @@ class FUVA_raw_headers(BaseModel):
     class Meta:
         db_table = 'fuva_raw_headers'
 
-#-------------------------------------------------------------------------------
 
 class FUVB_raw_headers(BaseModel):
     'Table of raw fuvb data'
@@ -204,7 +198,6 @@ class FUVB_raw_headers(BaseModel):
     class Meta:
         db_table = 'fuvb_raw_headers'
 
-#-------------------------------------------------------------------------------
 
 class FUVA_corr_headers(BaseModel):
     'Table of corr fuva data'
@@ -228,7 +221,6 @@ class FUVA_corr_headers(BaseModel):
     class Meta:
         db_table = 'fuva_corr_headers'
 
-#-------------------------------------------------------------------------------
 
 class FUVB_corr_headers(BaseModel):
     'Table of corr fuvb data'
@@ -252,7 +244,6 @@ class FUVB_corr_headers(BaseModel):
     class Meta:
         db_table = 'fuvb_corr_headers'
 
-#-------------------------------------------------------------------------------
 
 class Lampflash(BaseModel):
 
@@ -283,7 +274,7 @@ class Lampflash(BaseModel):
     
     class Meta:
         db_table = 'lampflash'
-#-------------------------------------------------------------------------------
+
 
 class Rawacqs(BaseModel):
 
@@ -313,7 +304,6 @@ class Rawacqs(BaseModel):
     class Meta:
         db_table = 'rawacqs'
 
-#-------------------------------------------------------------------------------
 
 class Darks(BaseModel):
     """Record dark rate"""
@@ -340,7 +330,6 @@ class Darks(BaseModel):
     class Meta:
         db_table = 'darks'
 
-#-------------------------------------------------------------------------------
 
 class Stims(BaseModel):
     """Record location of all STIM pulses"""
@@ -365,7 +354,6 @@ class Stims(BaseModel):
     class Meta:
         db_table = 'stims'
     
-#-------------------------------------------------------------------------------
 
 class Gain(BaseModel):
     """Record location of all Gain"""
@@ -386,7 +374,6 @@ class Gain(BaseModel):
     class Meta:
         db_table = 'gain'
 
-#-------------------------------------------------------------------------------
 
 class Flagged_Pixels(BaseModel):
     """Record all pixels below gain 3"""
@@ -404,7 +391,6 @@ class Flagged_Pixels(BaseModel):
     class Meta:
         db_table = 'bad_pixels'
 
-#-------------------------------------------------------------------------------
 
 class Jitter(BaseModel):
     """Record data from jitter files"""
@@ -445,7 +431,6 @@ class Jitter(BaseModel):
     class Meta:
         db_table = 'jitter'
 
-#-------------------------------------------------------------------------------
 
 class Gain_Trends(BaseModel):
     """Record decreases in Gain"""
@@ -459,3 +444,35 @@ class Gain_Trends(BaseModel):
     
     class Meta:
         db_table = 'gainsag_trend'
+
+
+class Gain_Trends(BaseModel):
+    """Record decreases in Gain"""
+    proj_bad_mjd = FloatField()
+    segment = CharField()
+    hv_lvl = IntegerField()
+    x = IntegerField()
+    y = IntegerField()
+    slope = FloatField()
+    intercept = FloatField()
+    
+    class Meta:
+        db_table = 'gainsag_trend'
+
+class Hv_Level(BaseModel):
+    """Record hv_lvl values"""
+    filename = CharField(primary_key=True)
+    expstart = FloatField()
+    segment = CharField()
+    dethvl = FloatField()
+    dethvc = FloatField()
+    dethvn = FloatField()
+    hvlevel = IntegerField()
+
+    rootname = ForeignKeyField(Observations,
+                               db_column='rootname',
+                               default=None,
+                               to_field="rootname",
+                               on_delete='CASCADE')
+    class Meta:
+        db_table = 'high_voltage'
