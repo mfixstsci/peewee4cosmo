@@ -361,9 +361,9 @@ def plot_pha_hist(corrtag_a, corrtag_b):
 
     f, (ax1, ax2) = plt.subplots(1,2,figsize=(20, 7))
 
-    #-- get fuva histogram
+    # get fuva histogram
     fuva_cnts = pha_hist(corrtag_a)
-    #-- plot fuva
+    # plot fuva
     ax1.bar(bins, fuva_cnts, width=1, color='b')
     ax1.set_title('FUVA', fontsize=fs, fontweight=fw)
     ax1.set_xlabel('PHA Bin', fontsize=fs, fontweight=fw)
@@ -372,9 +372,9 @@ def plot_pha_hist(corrtag_a, corrtag_b):
     ax1.set_ylim([0, 5000])
     ax1.grid()
 
-    #-- make fuvb histogram
+    # make fuvb histogram
     fuvb_cnts = pha_hist(corrtag_b)
-    #-- plot fuvb
+    # plot fuvb
     ax2.bar(bins, fuvb_cnts, width=1, color='r')
     ax2.set_title('FUVB', fontsize=fs, fontweight=fw)
     ax2.set_xlabel('PHA Bin', fontsize=fs, fontweight=fw)
@@ -387,7 +387,7 @@ def plot_pha_hist(corrtag_a, corrtag_b):
     plt.close()
     
 
-def make_plots(detector, base_dir, TA=False, mjd_per_step=False, isr=False):
+def make_plots(detector, base_dir, **kwargs):
     """ Create static monitoring plots for FUV/NUV dark rates.
 
     Parameters
@@ -396,17 +396,17 @@ def make_plots(detector, base_dir, TA=False, mjd_per_step=False, isr=False):
         The COS mode trends you are interested in plotting.
     base_dir: str
         Directory you are interested in writing to.
-    TA: bool
-        Flag to monitor target acq dark rate.
-    mjd_per_step: bool
-        Flag to make plots as function of MJD
-    isr: bool
-        Flag to make plots for ISR 
+    **kwargs:
+        Arbitrary keyword arguements.
 
     Returns
     -------
     None
     """
+
+    TA = kwargs.get('TA', False)
+    mjd_per_step = kwargs.get('mjd_per_step', False)
+    isr = kwargs.get('isr', False)
 
     if detector == 'FUV':
         search_strings = ['_corrtag_a.fits', '_corrtag_b.fits']
@@ -431,11 +431,6 @@ def make_plots(detector, base_dir, TA=False, mjd_per_step=False, isr=False):
         logger.warning("COULDN'T READ SOLAR DATA. PUTTING IN ZEROS.")
         solar_date = np.ones(1000)
         solar_flux = np.ones(1000)
-
-    # Open settings and get database
-    settings = get_settings()
-    database = get_database()
-
 
     if TA:
         logger.info("MAKING PLOTS FOR {} TARGACQS".format(detector))

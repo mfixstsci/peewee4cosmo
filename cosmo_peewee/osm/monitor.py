@@ -226,31 +226,36 @@ def make_shift_table(db_table):
     return data
 
 
-def make_panel(data, grating, height, width, detector, plt_color, top=False, x_range=False, acqs=False, all_nuv=False):
+def make_panel(data, **kwargs):
     """Make a bokeh panel for figure.
 
     Parameters
     ----------
     data: Astropy.Table
         Astropy table of all metadata.
-    grating: np.array
-        Data associated with a COS grating from table.
-    height: int
-        Height of panel.
-    width: int
-        Width of panel.
-    detector: str
-        FUV or NUV.
-    plt_color: str
-        color of scatter points.
-    top: Bool
-        Is it the top panel of the figure, True or False.
-    x_range: 
+    **kwargs
+        Keyword arguements for observing configuration and plotting
+
+        Depending on the configuration and location of the panel in the plot
+        you will want to pass specific parameters to the bokeh panel object.
+        For instance, the top panel will contain the title and the different
+        panels will have different colors etc. Easier to cut down on the 
+        number of arguements.
     """
 
     # Define tools that each panel will possess.
     TOOLS ='box_zoom,box_select,pan,reset,tap'
     
+    grating = kwargs.get('grating')
+    height = kwargs.get('height')
+    width = kwargs.get('width')
+    detector = kwargs.get('detector')
+    plt_color = kwargs.get('plt_color')
+    top = kwargs.get('top', False)
+    x_range = kwargs.get('x_range', False)
+    acqs = kwargs.get('acqs', False)
+    all_nuv = kwargs.get('all_nuv', False)
+
     # Build ColumnDataSource object
     source = ColumnDataSource(data=dict(
                     date=data['date'][grating],
@@ -373,9 +378,10 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
 
         # Create bokeh figure objects
         
-        # Panel 1
-        s1 = make_panel(unique_data, unique_G130M, plt_hgt,
-                        plt_wth, 'FUV', 'blue', top=True)
+        # Panel 1    
+        s1 = make_panel(unique_data, grating=unique_G130M, height=plt_hgt,
+                        width=plt_wth, detector='FUV', plt_color='blue', 
+                        top=True)
         # Fit shift as a function of date and plot it...
         fit,ydata,parameters,err = fit_data(data['date'][G130M],
                                             data['x_shift'][G130M])
@@ -383,8 +389,9 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
                 legend=str(parameters[0]))
         
         # Panel 2
-        s2 = make_panel(unique_data, unique_G160M, plt_hgt,
-                        plt_wth, 'FUV', 'green', x_range=s1.x_range)
+        s2 = make_panel(unique_data, grating=unique_G160M, height=plt_hgt,
+                        width=plt_wth, detector='FUV', plt_color='green', 
+                        x_range=s1.x_range)
         # Fit shift as a function of date and plot it...
         fit,ydata,parameters,err = fit_data(data['date'][G160M],
                                             data['x_shift'][G160M])
@@ -392,8 +399,9 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
                 legend=str(parameters[0]))
         
         # Panel 3
-        s3 = make_panel(unique_data, unique_G140L, plt_hgt, 
-                        plt_wth, 'FUV', 'yellow', x_range=s1.x_range)
+        s3 = make_panel(unique_data, grating=unique_G140L, height=plt_hgt, 
+                        width=plt_wth, detector='FUV', plt_color='yellow', 
+                        x_range=s1.x_range)
         
         # Fit shift as a function of date and plot it...
         fit,ydata,parameters,err = fit_data(data['date'][G140L],
@@ -488,8 +496,9 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         
         # Panel 1
         # Create bokeh figure.
-        s1 = make_panel(unique_data, unique_G185M, plt_hgt, 
-                        plt_wth, 'NUV', 'blue', top=True)
+        s1 = make_panel(unique_data, grating=unique_G185M, height=plt_hgt, 
+                        width=plt_wth, detector='NUV', plt_color='blue', 
+                        top=True)
         # Fit Data
         fit,ydata,parameters,err = fit_data(data['date'][G185M],
                                             data['x_shift'][G185M])
@@ -530,13 +539,13 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
                 + srh_offset, color='red', line_width=2)
 
         # Panel 2
-
         wcptab_row = np.where(wcptab_table['OPT_ELEM']=='G225M')
         xc_range = wcptab_table[wcptab_row]['XC_RANGE']
         srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
 
-        s2 = make_panel(unique_data, unique_G225M, plt_hgt, 
-                        plt_wth, 'NUV', 'red', x_range=s1.x_range)
+        s2 = make_panel(unique_data, grating=unique_G225M, height=plt_hgt, 
+                        width=plt_wth, detector='NUV', plt_color='red', 
+                        x_range=s1.x_range)
 
         fit,ydata,parameters,err = fit_data(data['date'][G225M],
                                             data['x_shift'][G225M])
@@ -573,8 +582,9 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         xc_range = wcptab_table[wcptab_row]['XC_RANGE']
         srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
         
-        s3 = make_panel(unique_data, unique_G285M, plt_hgt, 
-                        plt_wth, 'NUV', 'yellow', x_range=s1.x_range)
+        s3 = make_panel(unique_data, grating=unique_G285M, height=plt_hgt, 
+                        width=plt_wth, detector='NUV', plt_color='yellow', 
+                        x_range=s1.x_range)
         
         fit,ydata,parameters,err = fit_data(data['date'][G285M],
                                             data['x_shift'][G285M])
@@ -606,13 +616,14 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
                 np.zeros_like(data['date'][G285M][after_data]) 
                 + srh_offset, color='red', line_width=2)
         
-        #-- Panel 4
+        # Panel 4
         wcptab_row = np.where(wcptab_table['OPT_ELEM']=='G230L')
         xc_range = wcptab_table[wcptab_row]['XC_RANGE']
         srh_offset = wcptab_table[wcptab_row]['SEARCH_OFFSET']
 
-        s4 = make_panel(unique_data, unique_G230L, plt_hgt, 
-                        plt_wth, 'NUV', 'green', x_range=s1.x_range)
+        s4 = make_panel(unique_data, grating=unique_G230L, height=plt_hgt, 
+                        width=plt_wth, detector='NUV', plt_color='green', 
+                        x_range=s1.x_range)
 
         fit,ydata,parameters,err = fit_data(data['date'][G230L],
                                             data['x_shift'][G230L])
@@ -645,8 +656,8 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
                 + srh_offset, color='red', line_width=2)
         
         # Panel 5
-        s5 = make_panel(unique_data, unique_NUV, plt_hgt, 
-                        plt_wth, 'NUV', 'firebrick', 
+        s5 = make_panel(unique_data, grating=unique_NUV, height=plt_hgt, 
+                        width=plt_wth, detector='NUV', plt_color='firebrick', 
                         x_range=s1.x_range, all_nuv=True)
         fit,ydata,parameters,err = fit_data(data['date'][NUV],
                                             data['x_shift'][NUV])
@@ -654,18 +665,18 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
                 line_width=2, legend=str(parameters[0]))
         
         # Panel 6
-        s6 = make_panel(unique_acqs, unique_mirrora, plt_hgt, 
-                        plt_wth, 'NUV', 'firebrick', x_range=s1.x_range, 
-                        acqs=True)
+        s6 = make_panel(unique_acqs, grating=unique_mirrora, height=plt_hgt, 
+                        width=plt_wth, detector='NUV', plt_color='firebrick', 
+                        x_range=s1.x_range, acqs=True)
         fit,ydata,parameters,err = fit_data(data_acqs['date'][mirrora],
                                             data_acqs['x_shift'][mirrora])
         s6.line(ydata, fit, color='black', 
                 line_width=2, legend=str(parameters[0]))
         
         # Panel 7
-        s7 = make_panel(unique_acqs, unique_mirrorb, plt_hgt, 
-                        plt_wth, 'NUV', 'firebrick', x_range=s1.x_range, 
-                        acqs=True)
+        s7 = make_panel(unique_acqs, grating=unique_mirrorb, height=plt_hgt, 
+                        width=plt_wth, detector='NUV', plt_color='firebrick', 
+                        x_range=s1.x_range, acqs=True)
         fit,ydata,parameters,err = fit_data(data_acqs['date'][mirrorb],
                                             data_acqs['x_shift'][mirrorb])
         s7.line(ydata, fit, color='black', 
@@ -1717,8 +1728,8 @@ def monitor():
     flash_data = make_shift_table(Lampflash)
     rawacq_data = make_shift_table(Rawacqs)
     
-    ascii.write(flash_data, os.path.join(monitor_dir,'monitor_db_table.csv'), 
-                format='csv', overwrite=True)
+    # ascii.write(flash_data, os.path.join(monitor_dir,'monitor_db_table.csv'), 
+    #             format='csv', overwrite=True)
 
     # Make static plots.
     make_plots(flash_data, rawacq_data, monitor_dir)

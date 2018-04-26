@@ -122,7 +122,7 @@ def plot_histogram(dark, outname):
     plt.close(fig)
 
 
-def plot_time(detector, dark, date, temp, solar, solar_date, outname):
+def plot_time(detector, dark, date, *args):
     """Plot the dar-rate vs time
 
     Parameters
@@ -133,18 +133,12 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
         array of measured dark rates in counts/s
     date : np.ndarray
         array of measured times
-    temp : np.ndarray
-        array of temperatures
-    solar : np.ndarray
-        array of solar flux values
-    solar_date : np.ndarray
-        array of solar dates
-    outname : str
-        name of output plot
-    isr: bool
-        Plot for x range of cycle specific ISR.
+    **args
+        Arbitrary number of arguements to pass to array.
     """
     
+    temp, solar, solar_date, outname = args
+
     remove_if_there(outname)
     
     plt.rc('font', weight='bold')
@@ -288,7 +282,7 @@ def plot_time(detector, dark, date, temp, solar, solar_date, outname):
     plt.close(fig)
 
 
-def plot_orbital_rate(longitude, latitude, darkrate, sun_lon, sun_lat, outname):
+def plot_orbital_rate(longitude, latitude, darkrate, *args):
     """Plot the dark-rate of the detector vs orbital position
 
     Parameters
@@ -299,15 +293,12 @@ def plot_orbital_rate(longitude, latitude, darkrate, sun_lon, sun_lat, outname):
         latitude of HST
     darkrate : np.ndarray
         measured dark-rate of the detector
-    sun_long : np.ndarray
-        longitude of the sub-solar point
-    sun_lat : np.ndarray
-        latitude of the sub-solar point
-    outname : str
-        name of the output plot
-
+    *args
+        Arbitrary number of arguements to pass to this function.
     """
 
+    sun_lon, sun_lat, outname = args
+    
     pretty_plot = True
     if pretty_plot:
         pl_opt = {"fontweight": "bold",
@@ -487,7 +478,7 @@ def plot_orbital_rate(longitude, latitude, darkrate, sun_lon, sun_lat, outname):
 
 
 def plot_spatial(filename):
-
+    
     hdu = fits.open('/smov/cos/Data/11895/otfrdata/12-01-2014/\
                     lb8s2mn9q_corrtag_a.fits.gz')
     segment = hdu[0].header['segment']
@@ -517,8 +508,14 @@ def find_boundaries(img, xtractab, cenwave, aperture, segment):
     ----------
     img: array-like
         2-D array of spectrum you wish to extract.
-    header_dict: dictionary
-        Dictionary of header information.
+    xtractab: str
+        COS Extraction Tab
+    cenwave: int
+        COS FUV cenwave
+    aperture: str
+        COS aperture (BOA/PSA)
+    segment: str
+        FUVA or FUVB
     """
     lref_dir = "/grp/hst/cdbs/lref/"
     with fits.open(lref_dir+xtractab[5:]) as onedx:
@@ -535,6 +532,19 @@ def find_boundaries(img, xtractab, cenwave, aperture, segment):
 
 def make_image(xarr, yarr):
     """This very basically makes a 2D image from a list of coordinates
+
+    Parameters
+    ----------
+    xarr : array
+        x positions of counts on detector
+    yarr : array
+        y positions of counts on detector
+    
+    Returns
+    -------
+    img : array
+        2-D img of all of the counts that landed on the detector during an
+        exposure.
     """
 
     img = np.zeros((1024, 16384))

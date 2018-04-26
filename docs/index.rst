@@ -22,6 +22,7 @@ Contents:
    database_mods
    osm_mods
    stim_mods
+   hv_lvl_mods
 
 
 Indices and tables

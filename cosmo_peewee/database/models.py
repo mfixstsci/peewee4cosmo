@@ -391,47 +391,7 @@ class Flagged_Pixels(BaseModel):
     class Meta:
         db_table = 'bad_pixels'
 
-
-class Jitter(BaseModel):
-    """Record data from jitter files"""
-    rootname = CharField()
-    seconds = FloatField()
-    v2_dom = FloatField()
-    v3_dom = FloatField()
-    v2_roll = FloatField()
-    v3_roll = FloatField()
-    si_v2_avg = FloatField()
-    si_v2_rms = FloatField()
-    si_v2_p2p = FloatField()
-    si_v3_avg = FloatField()
-    si_v3_rms = FloatField()
-    si_v3_p2p = FloatField()
-    ra = FloatField()
-    dec = FloatField()
-    roll = FloatField()
-    limbang = FloatField()
-    termang = FloatField()
-    latitude = FloatField()
-    longitude = FloatField()
-    mag_v1 = FloatField()
-    mag_v2 = FloatField()
-    mag_v3 = FloatField()
-    brightlimb = BooleanField()
-    fgs_flags = FloatField()
-    daynight = BooleanField()
-    recenter = BooleanField()
-    takedata = BooleanField()
-    slewflag = BooleanField()
-
-    filename = ForeignKeyField(Files,
-                               db_column='filename',
-                               default=None,
-                               to_field="filename",
-                               on_delete='CASCADE')
-    class Meta:
-        db_table = 'jitter'
-
-
+  
 class Gain_Trends(BaseModel):
     """Record decreases in Gain"""
     proj_bad_mjd = FloatField()
@@ -445,19 +405,6 @@ class Gain_Trends(BaseModel):
     class Meta:
         db_table = 'gainsag_trend'
 
-
-class Gain_Trends(BaseModel):
-    """Record decreases in Gain"""
-    proj_bad_mjd = FloatField()
-    segment = CharField()
-    hv_lvl = IntegerField()
-    x = IntegerField()
-    y = IntegerField()
-    slope = FloatField()
-    intercept = FloatField()
-    
-    class Meta:
-        db_table = 'gainsag_trend'
 
 class Hv_Level(BaseModel):
     """Record hv_lvl values"""

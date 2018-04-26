@@ -16,27 +16,25 @@ from time import gmtime, strftime, localtime
 from ..utils import remove_if_there
 
 
-def plot_time(detector, dark, date, temp, solar, solar_date, outname):
+def plot_time(detector, dark, date, *args):
 
-    """Plot the dar-rate vs time
+    """Plot the dark rate vs time
+    
     Parameters
     ----------
     detector : str
         FUV or NUV
-    dark : np.ndarray
-        array of measured dark rates in counts/s
-    date : np.ndarray
-        array of measured times
-    temp : np.ndarray
-        array of temperatures
-    solar : np.ndarray
-        array of solar flux values
-    solar_date : np.ndarray
-        array of solar dates
-    outname : str
-        path + name of output plot
+    dark : array
+        dark measurements
+    date : array
+        date for dark measurements
+    *args
+        Arbitrary number of arguments to pass to this function. 
     """
 
+    # Unravel arguments
+    temp, solar, solar_date, outname = args
+    
     # Check and then remove if file exists.
     remove_if_there(outname)
 

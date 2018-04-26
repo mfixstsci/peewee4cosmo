@@ -153,7 +153,7 @@ def find_stims(image, segment, stim, brf_file):
     return found_x + x1, found_y + y1
 
 
-def locate_stims(data_object, start=0, increment=None, brf_file=None):
+def locate_stims(data_object, **kwargs):
     """Breaks a timetag exposure into different time steps and measures
     the x + y poisitons of the stim pulses to track them over the 
     length of an exposure.
@@ -162,18 +162,19 @@ def locate_stims(data_object, start=0, increment=None, brf_file=None):
     ----------
     data_object: peewee row object
         Row from the cosmo database with path and filename attributes.
-    start: int
-        Time step start
-    increment: float
-        Time step increment (dt)
-    brf_file: str
-        path and filename for brf reference file.
+    **kwargs
+        Arbitrary number of keyword arguements.
 
     Yields
     ------
     info: dict
         Dictionary with information that will make a row in the DB.
     """
+
+    start = kwargs.get('start', 0)
+    increment = kwargs.get('increment', None)
+    brf_file = kwargs.get('brf_file', None)
+
     full_path = os.path.join(data_object.path, data_object.filename)
 
     # change this to pull brf file from the header if not specified    
@@ -414,8 +415,7 @@ def make_position_panel(segment, stim):
                         ("Counts","@counts"),
                         ("Proposal ID","@proposid")
                         ],
-                names=['data_scatter']   
-                     )
+                names=['data_scatter'])
 
     p = figure(width=plt_wth, height=plt_hgt, 
                x_range=Range1d(x_range_min, x_range_max), 
@@ -550,8 +550,6 @@ def make_stretch_panel(segment, left_stim, right_stim, reverse_stims=False):
     # Set height and width.
     plt_wth = 600
     plt_hgt = 500
-
-    #data = Stims.select().where(Stims.segment==segment)
     
     query = list(Stims.select().where(Stims.segment==segment).dicts())
 
@@ -586,18 +584,25 @@ def make_stretch_panel(segment, left_stim, right_stim, reverse_stims=False):
     return p
 
 
-def interactive_plotting(path=None, filename=None, position=False,time=False, stretch=False):
+def interactive_plotting(**kwargs):
     """Make interactive Bokeh Figures
 
     Parameters
     ----------
-    None
+    **kwargs
+        Arbitrary number of keyword arguments.
 
     Returns
     -------
     None
     """
 
+    path = kwargs.get('path', None)
+    filename = kwargs.get('filename', None)
+    position = kwargs.get('position', False)
+    time = kwargs.get('time', False)
+    stretch = kwargs.get('stretch', False)
+   
     if position:
         outname = os.path.join(path, filename)
         remove_if_there(outname)
@@ -637,9 +642,17 @@ def interactive_plotting(path=None, filename=None, position=False,time=False, st
         save(p, filename=outname)
 
 
-def make_plots(out_dir, connection_string):
-    """Make the overall STIM monitor plots.
-    They will all be output to out_dir.
+def make_plots(out_dir):
+    """Make stim monitor plots and put them in out_dir
+
+    Parameters
+    ----------
+    out_dir : str
+        Out put directories where plots will live
+
+    Output
+    ------
+    None
     """
     # Plot x,y positions
 
@@ -976,7 +989,7 @@ def stim_monitor():
     monitor_dir = os.path.join(settings['monitor_location'], 'Stims')
     
     logger.info("MAKING STATIC PLOTS")
-    make_plots(monitor_dir, settings['connection_string'])
+    make_plots(monitor_dir)
 
     # Move plots pngs to webpage dir
     for item in glob.glob(os.path.join(monitor_dir, '*.p??')):

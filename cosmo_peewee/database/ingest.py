@@ -36,7 +36,7 @@ from ..filesystem import find_all_datasets
 from .models import get_database, get_settings
 from .models import Files, NUV_corr_headers, FUVA_raw_headers, FUVB_raw_headers
 from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs
-from .models import Darks, Stims, Observations, Gain, Flagged_Pixels, Jitter
+from .models import Darks, Stims, Observations, Gain, Flagged_Pixels
 from .models import Hv_Level
 
 from .models import Gain_Trends
@@ -47,7 +47,7 @@ from ..osm.monitor import monitor as osm_monitor
 from ..stims.monitor import locate_stims
 from ..stims.monitor import stim_monitor
 
-from ..hv_level import main as hvlvl_monitor
+from ..hv_level.monitor_voltage import main as hvlvl_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -656,7 +656,6 @@ def ingest_all():
               Stims,
               Gain,
               Flagged_Pixels,
-              Jitter,
               Gain_Trends,
               Hv_Level]
 
@@ -726,11 +725,11 @@ def ingest_all():
     logger.info("POPULATING GAIN TABLE")
     populate_gain(settings['num_cpu'])
     
-    Populate flagged pixels table.
+    # Populate flagged pixels table.
     logger.info("POPULATING FLAGGED PIXEL TABLE")
     find_flagged()
     
-    # Work in progress
+    # Work in progress, big bottleneck
     # Populate flagged pixels table.
     # if date.today().weekday() == 0:
     #     logger.info("POPULATING GAIN TRENDS TABLE")
@@ -738,7 +737,7 @@ def ingest_all():
 
     logger.info("POPULATING HV LEVEL TABLE")
     populate_hv_level(settings['num_cpu'])
-    
+
     logger.info("INGESTION COMPLETE")
 
 def run_monitors():
@@ -757,8 +756,8 @@ def run_monitors():
     setup_logging()
     
     osm_monitor()
-    # dark_monitor()
-    # stim_monitor()
-    # cci_main(os.path.join(settings['monitor_location'], 'CCI'), 
-    #          hotspot_filter=True)
+    dark_monitor()
+    stim_monitor()
+    cci_main(os.path.join(settings['monitor_location'], 'CCI'), 
+             hotspot_filter=True)
     hvlvl_monitor()

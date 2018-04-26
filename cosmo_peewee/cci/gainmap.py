@@ -374,10 +374,14 @@ class CCI:
         hdu_out.close()
 
 
-def measure_gainimage(data_cube, mincounts=30, phlow=1, phhigh=31):
+def measure_gainimage(data_cube, **kwargs):
     """Measure the modal gain at each pixel
     returns a 2d gainmap.
     """
+
+    mincounts = kwargs.get('mincounts',30)
+    phlow = kwargs.get('phlow', 1)
+    phhigh = kwargs.get('phhigh', 31)
 
     # Suppress certain pharanges
     for i in list(range(0, phlow+1)) + list(range(phhigh, len(data_cube))):
@@ -401,7 +405,7 @@ def measure_gainimage(data_cube, mincounts=30, phlow=1, phhigh=31):
         if not success:
             continue
 
-        #-- double-check
+        # double-check
         if g.mean.value <= 3:
             sub_dist = dist - g(np.arange(len(dist)))
             sub_dist[sub_dist < 0] = 0
@@ -419,8 +423,12 @@ def measure_gainimage(data_cube, mincounts=30, phlow=1, phhigh=31):
     return out_gain, out_counts, out_std
 
 
-def fit_distribution(dist, start_mean=None, start_amp=None, start_std=None):
+def fit_distribution(dist, **kwargs):
 
+    start_mean = kwargs.get('start_mean', None)
+    start_amp = kwargs.get('start_amp', None)
+    start_std = kwargs.get('start_std', None)
+    
     x_vals = np.arange(len(dist))
 
     start_mean = start_mean or dist.argmax()
@@ -443,24 +451,24 @@ def fit_distribution(dist, start_mean=None, start_amp=None, start_std=None):
 
 def fit_ok(fit, fitter, start_mean, start_amp, start_std):
 
-    #-- Check for success in the LevMarLSQ fitting
+    # Check for success in the LevMarLSQ fitting
     if not fitter.fit_info['ierr'] in [1, 2, 3, 4]:
         return False
 
-    #-- If the peak is too low
+    # If the peak is too low
     if fit.amplitude.value < 12:
         return False
 
     if not fit.stddev.value:
         return False
 
-    #-- Check if fitting stayed at initial
+    # Check if fitting stayed at initial
     if not (start_mean - fit.mean.value):
         return False
     if not (start_amp - fit.amplitude.value):
         return False
 
-    #-- Not sure this is possible, but checking anyway
+    # Not sure this is possible, but checking anyway
     if np.isnan(fit.mean.value):
         return False
     if (fit.mean.value <= 0) or (fit.mean.value >= 31):
@@ -469,30 +477,27 @@ def fit_ok(fit, fitter, start_mean, start_amp, start_std):
     return True
 
 
-def make_total_gainmap(hv_lvl, gainmap_dir=None, segment='FUVB', start_mjd=55055, end_mjd=70000, reverse=False):
+def make_total_gainmap(hv_lvl, **kwargs):
     """Make total gainmaps for each HV level and the total over gainmap.
 
     Parameters
     ----------
     hv_lvl: int
         High voltage for gainmap you want to make.
-    gainmap_dir: str
-        Path to directory where gainmap are located.
-    segment: str
-        FUV segment you wish you to make the gainmap for.
-    start_mjd: int
-        Start date of for gainmaps you want to build. 
-        (Default will catch first gainmap)
-    end_mjd: int
-        End date that gainmaps should have. 
-        (Default will be date way after recent gainmap)
-    reverse: bool
-        Trend gain backwards to get intitial gainmap.
+    **kwargs
+        Arbitrary number of keyword arguements.
     
     Returns
     -------
     gainmap
     """
+
+    gainmap_dir = kwargs.get('gainmap_dir', None)
+    segment = kwargs.get('segment', 'FUVB')
+    start_mjd = kwargs.get('start_mjd', 55055)
+    end_mjd = kwargs.get('end_mjd', 70000)
+    reverse = kwargs.get('reverse', False)
+
     # Depending on the segment, the filename are different.
     if segment == 'FUVA':
         search_string = 'l_*_00_{}_cci_gainmap.fits*'.format(hv_lvl)
@@ -529,7 +534,7 @@ def make_total_gainmap(hv_lvl, gainmap_dir=None, segment='FUVB', start_mjd=55055
         index = np.where(cci_data)
         
         # get the high voltage level.
-        dethv = cci_hdu[0].header['DETHV']
+        # dethv = cci_hdu[0].header['DETHV']
 
         # Add the data to the array and move to the next gainmap.
         out_data[index] = cci_data[index]
@@ -537,24 +542,25 @@ def make_total_gainmap(hv_lvl, gainmap_dir=None, segment='FUVB', start_mjd=55055
     return enlarge(out_data, x=X_BINNING, y=Y_BINNING)
 
 
-def make_all_gainmaps(hv_lvl, gainmap_dir=None, start_mjd=55055, end_mjd=70000, total=False):
+def make_all_gainmaps(hv_lvl, **kwargs):
     """Make all of the total gainmaps.
 
     Parameters
     ----------
-    gainmap_dir: str
-        Directory of where the gainmaps live
-    start_mjd: int
-        Start date of for gainmaps you want to build. (Default will catch first gainmap)
-    end_mjd: int
-        End date that gainmaps should have. (Default will be date way after recent gainmap)
-    total: bool
-        Make gainmap from all HV levels. 
+    hv_lvl : integer
+        Command high voltage level
+    **kwargs
+        An arbitrary number of keyword arguements
     
     Returns
     -------
     None
     """
+
+    gainmap_dir = kwargs.get('gainmap_dir', None)
+    start_mjd = kwargs.get('start_mjd', 55055)
+    end_mjd = kwargs.get('end_mjd', 70000)
+    total = kwargs.get('total', False)
 
     if total:
         filename = os.path.join(gainmap_dir,'total_gain.fits')
@@ -576,23 +582,31 @@ def make_all_gainmaps(hv_lvl, gainmap_dir=None, start_mjd=55055, end_mjd=70000, 
         hdu_out[0].header['DATEMADE'] = (time.strftime("%d/%m/%Y"))
 
         # Data ext
-        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', gainmap_dir, 
-                                                             'FUVA', start_mjd, 
-                                                             end_mjd, 
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', 
+                                                             gainmap_dir=gainmap_dir, 
+                                                             segment='FUVA', 
+                                                             start_mjd=start_mjd, 
+                                                             end_mjd=end_mjd, 
                                                              reverse=True)))
         hdu_out[1].header['EXTNAME'] = 'FUVAINIT'
-        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', gainmap_dir, 
-                                                             'FUVB', start_mjd, 
-                                                             end_mjd, 
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', 
+                                                             gainmap_dir=gainmap_dir, 
+                                                             segment='FUVB', 
+                                                             start_mjd=start_mjd, 
+                                                             end_mjd=end_mjd, 
                                                              reverse=True)))
         hdu_out[2].header['EXTNAME'] = 'FUVBINIT'
-        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', gainmap_dir, 
-                                                             'FUVA', start_mjd, 
-                                                             end_mjd)))
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', 
+                                                             gainmap_dir=gainmap_dir, 
+                                                             segment='FUVA', 
+                                                             start_mjd=start_mjd, 
+                                                             end_mjd=end_mjd)))
         hdu_out[3].header['EXTNAME'] = 'FUVALAST'
-        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', gainmap_dir, 
-                                                             'FUVB', start_mjd, 
-                                                             end_mjd)))
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap('???', 
+                                                             gainmap_dir=gainmap_dir, 
+                                                             segment='FUVB', 
+                                                             start_mjd=start_mjd, 
+                                                             end_mjd=end_mjd)))
         hdu_out[4].header['EXTNAME'] = 'FUVBLAST'
         hdu_out.writeto(filename, overwrite=True)
         hdu_out.close()
@@ -615,23 +629,31 @@ def make_all_gainmaps(hv_lvl, gainmap_dir=None, start_mjd=55055, end_mjd=70000, 
         hdu_out[0].header['DATEMADE'] = (time.strftime("%d/%m/%Y"))
 
         # Data ext
-        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, gainmap_dir, 
-                                                             'FUVA', start_mjd, 
-                                                             end_mjd, 
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, 
+                                                             gainmap_dir=gainmap_dir, 
+                                                             segment='FUVA', 
+                                                             start_mjd=start_mjd, 
+                                                             end_mjd=end_mjd, 
                                                              reverse=True)))
         hdu_out[1].header['EXTNAME'] = 'FUVAINIT'
-        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, gainmap_dir, 
-                                                             'FUVB', start_mjd, 
-                                                             end_mjd, 
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, 
+                                                             gainmap_dir=gainmap_dir, 
+                                                             segment='FUVB', 
+                                                             start_mjd=start_mjd, 
+                                                             end_mjd=end_mjd, 
                                                              reverse=True)))
         hdu_out[2].header['EXTNAME'] = 'FUVBINIT'
-        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, gainmap_dir, 
-                                                             'FUVA', start_mjd, 
-                                                             end_mjd)))
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, 
+                                                             gainmap_dir=gainmap_dir, 
+                                                             segment='FUVA', 
+                                                             start_mjd=start_mjd, 
+                                                             end_mjd=end_mjd)))
         hdu_out[3].header['EXTNAME'] = 'FUVALAST'
-        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, gainmap_dir, 
-                                                             'FUVB', start_mjd, 
-                                                             end_mjd)))
+        hdu_out.append(fits.ImageHDU(data=make_total_gainmap(hv_lvl, 
+                                                             gainmap_dir=gainmap_dir, 
+                                                             segment='FUVB', 
+                                                             start_mjd=start_mjd, 
+                                                             end_mjd=end_mjd)))
         hdu_out[4].header['EXTNAME'] = 'FUVBLAST'
         hdu_out.writeto(filename, overwrite=True)
         hdu_out.close()
