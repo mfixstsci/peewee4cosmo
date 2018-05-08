@@ -25,6 +25,9 @@ Download the .zip file or clone the respository from GitHub and install the tool
 resulting directory with `python setup.py install`
 
 # Usage
+
+.. warning:: note the space between the directive and the text
+
 peewee4cosmo is used via entry points when the package is installed. Here are the most used cases:
 
 `$ cm_ingest # This runs the ingestion process that pre-processes and store data in the tables.`
@@ -115,7 +118,9 @@ This entry point allows users to create figures that show the difference in gain
 **The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to
 show the difference between two gain sag tables!**
 
-`$ cosmo_gsagtab_residual_plot --old_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-02-05T16-42-01.353932.fits --new_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-05-07T11-48-22.542754.fits --out_dir some/dir/you/like`
+`$ cosmo_gsagtab_residual_plot --old_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-02-05T16-42-01.
+353932.fits --new_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-05-07T11-48-22.542754.fits
+--out_dir some/dir/you/like`
 
 
 If there are any difference in other high voltage levels in the tables, a plot with the naming convention
