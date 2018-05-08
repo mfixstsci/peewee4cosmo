@@ -17,7 +17,7 @@ This tool requires a few packages all of which are included in the Anaconda pyth
 
 * NumPy
 
-* Maplotlib
+* Matplotlib
 
 # Installation
 
@@ -96,7 +96,7 @@ By default we set the segment argument to be FUVB because of how quickly it degr
 For FUVB, the high voltage was raised over the time period we selected from 167 to 175.
 
 ![Example Plot](docs/_static/gsag_by_date_55197-55927_167_FUVB.png "HV 167 FUVB over given time period.")
-![Example Plot](docs/_static/gsag_by_date_55197-55927_167_FUVB.png "HV 175 FUVB over given time period.")
+![Example Plot](docs/_static/gsag_by_date_55197-55927_175_FUVB.png "HV 175 FUVB over given time period.")
 
 
 But you can select FUVA using the segment argument.
