@@ -84,7 +84,8 @@ Convenience functions for gain sag table and gain maps:
 ### cosmo_gsagtab_by_date
 This entry point allows users to create that show the gain sag progression over selected dates.
 
-**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to show gain sag progress of regions over the dates selected!**
+**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to show gain
+sag progress of regions over the dates selected!**
 
 By default we set the segment argument to be FUVB because of how quickly it degrades.
 
@@ -92,34 +93,40 @@ By default we set the segment argument to be FUVB because of how quickly it degr
     monitor_directory_from_configure.yaml/CCI/gsagtab_comparisons/gsag_by_date_55197-55927_167_FUVB.png
     monitor_directory_from_configure.yaml/CCI/gsagtab_comparisons/gsag_by_date_55197-55927_175_FUVB.png
 
+For FUVB, the high voltage was raised over the time period we selected from 167 to 175.
+
 ![Example Plot](docs/_static/gsag_by_date_55197-55927_167_FUVB.png "HV 167 FUVB over given time period.")
 ![Example Plot](docs/_static/gsag_by_date_55197-55927_167_FUVB.png "HV 175 FUVB over given time period.")
 
-For FUVB, the high voltage was raised over the time period we selected 167 -> 175.
 
 But you can select FUVA using the segment argument.
 
     $ cosmo_gsagtab_by_date --min_date 55197 --max_date 55927 --segment FUVA
     monitor_directory_from_configure.yaml/CCI/gsagtab_comparisons/gsag_by_date_55197-55927_169_FUVA.png
 
+FUVA was only operating at one high voltage over the same time period. Only one plot was created.
+
 ![Example Plot](docs/_static/gsag_by_date_55197-55927_169_FUVA.png "HV 169 FUVA over given time period.")
-
-
-Where as FUVA only operated at high voltage level 169.
 
 ### cosmo_gsagtab_residual_plot
 This entry point allows users to create figures that show the difference in gainsag between two different gain maps.
 
-**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to show the difference between two gain sag tables!**
+**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to
+show the difference between two gain sag tables!**
 
 `$ cosmo_gsagtab_residual_plot --old_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-02-05T16-42-01.353932.fits --new_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-05-07T11-48-22.542754.fits --out_dir some/dir/you/like`
 
+
+If there are any difference in other high voltage levels in the tables, a plot with the naming convention
+`gsagtab_residual_comparion_segment_hv_lvl.png` will be written to the out_dir provided. Here we selected one
+of the high voltage levels (169) for this example.
+
 ![Example Plot](docs/_static/gsagtab_residual_comparion_FUVB_169.png "Differences in gain sag tables for FUVB 169.")
 
-If there are any difference in other high voltage levels in the tables, a plot with the naming convention `gsagtab_residual_comparion_segment_hv_lvl.png` will be written to the out_dir provided.
 
 ### cosmo_gsagtab_creator
-This entry point allows users to create gain sag tables up to a certain date. This functionality is great for making gain sag tables on the fly.
+This entry point allows users to create gain sag tables up to a certain date. This functionality is great for making
+gain sag tables on the fly.
 
 ### cosmo_gainmap_gsag_plot
 This entry point creates a figure of the gain sag plotted on top of the gain map for a specific high voltage level.
@@ -127,6 +134,7 @@ This entry point creates a figure of the gain sag plotted on top of the gain map
 **The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is show the sagged pixels in physical detector space!**
 
 `$ cosmo_gainmap_gsag_plot --gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-05-07T11-48-22.542754.fits --hv_lvl 163`
+
 `$ open monitor_directory_from_configure.yaml/CCI/gainmap_gsagtab_delivery_plots/gainmap_gsag_filter_2018-05-07T11-48-22.542754_163.png`
 
 ![Example Plot](docs/_static/gainmap_gsag_filter_2018-05-07T11-48-22.542754_163.png "Plot of gain map with gain sag overplotted for table and high voltage provided.")
