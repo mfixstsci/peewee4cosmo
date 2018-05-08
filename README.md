@@ -21,10 +21,7 @@ This tool requires a few packages all of which are included in the Anaconda pyth
 
 # Installation
 
-You can install the tool using `pip` with
-`pip install git+https://github.com/spacetelescope/jwst_gtvt.git`
-
-You can download the .zip file or clone the respository from GitHub and install the tool from inside the
+Download the .zip file or clone the respository from GitHub and install the tool from inside the
 resulting directory with `python setup.py install`
 
 # Usage
@@ -34,7 +31,7 @@ peewee4cosmo is used via entry points when the package is installed. Here are th
 
 `$ cm_monitors # This runs the monitors that print information to screen and creates figures.`
 
-Convenience functions for gainsag table and gaimaps:
+Convenience functions for gain sag table and gain maps:
 
     $ cosmo_gsagtab_by_date --help
         usage: cosmo_gsagtab_by_date [-h] [--segment SEGMENT] [--min_date MIN_DATE]
@@ -86,6 +83,7 @@ Convenience functions for gainsag table and gaimaps:
 
 ### cosmo_gsagtab_by_date
 This entry point allows users to create that show the gain sag progression over selected dates.
+
 **The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to show gain sag progress of regions over the dates selected!**
 
 By default we set the segment argument to be FUVB because of how quickly it degrades.
@@ -100,6 +98,7 @@ By default we set the segment argument to be FUVB because of how quickly it degr
 For FUVB, the high voltage was raised over the time period we selected 167 -> 175.
 
 But you can select FUVA using the segment argument.
+
     $ cosmo_gsagtab_by_date --min_date 55197 --max_date 55927 --segment FUVA
     monitor_directory_from_configure.yaml/CCI/gsagtab_comparisons/gsag_by_date_55197-55927_169_FUVA.png
 
@@ -110,7 +109,9 @@ Where as FUVA only operated at high voltage level 169.
 
 ### cosmo_gsagtab_residual_plot
 This entry point allows users to create figures that show the difference in gainsag between two different gain maps.
+
 **The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to show the difference between two gain sag tables!**
+
 `$ cosmo_gsagtab_residual_plot --old_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-02-05T16-42-01.353932.fits --new_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-05-07T11-48-22.542754.fits --out_dir some/dir/you/like`
 
 ![Example Plot](docs/_static/gsagtab_residual_comparion_FUVB_169.png "Differences in gain sag tables for FUVB 169.")
@@ -122,7 +123,9 @@ This entry point allows users to create gain sag tables up to a certain date. Th
 
 ### cosmo_gainmap_gsag_plot
 This entry point creates a figure of the gain sag plotted on top of the gain map for a specific high voltage level.
+
 **The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is show the sagged pixels in physical detector space!**
+
 `$ cosmo_gainmap_gsag_plot --gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-05-07T11-48-22.542754.fits --hv_lvl 163`
 `$ open monitor_directory_from_configure.yaml/CCI/gainmap_gsagtab_delivery_plots/gainmap_gsag_filter_2018-05-07T11-48-22.542754_163.png`
 
