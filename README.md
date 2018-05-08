@@ -90,8 +90,8 @@ Convenience functions for gain sag table and gain maps:
 This entry point allows users to create that show the gain sag progression over selected dates.
 
 
-**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to show gain
-sag progress of regions over the dates selected!**
+>**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to show gain
+> sag progress of regions over the dates selected!**
 
 By default we set the segment argument to be FUVB because of how quickly it degrades.
 
@@ -117,8 +117,8 @@ FUVA was only operating at one high voltage over the same time period. Only one 
 ### cosmo_gsagtab_residual_plot
 This entry point allows users to create figures that show the difference in gainsag between two different gain maps.
 
-**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to
-show the difference between two gain sag tables!**
+>**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to
+>show the difference between two gain sag tables!**
 
 `$ cosmo_gsagtab_residual_plot --old_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-02-05T16-42-01.
 353932.fits --new_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-05-07T11-48-22.542754.fits
@@ -139,7 +139,8 @@ gain sag tables on the fly.
 ### cosmo_gainmap_gsag_plot
 This entry point creates a figure of the gain sag plotted on top of the gain map for a specific high voltage level.
 
-**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is show the sagged pixels in physical detector space!**
+>**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is show the
+>sagged pixels in physical detector space!**
 
 `$ cosmo_gainmap_gsag_plot --gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-05-07T11-48-22.542754.fits --hv_lvl 163`
 
