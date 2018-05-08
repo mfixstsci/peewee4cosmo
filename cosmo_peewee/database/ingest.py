@@ -61,6 +61,8 @@ def bulk_insert(table, data_source, debug=False):
         Table that is going to be populated.
     data_source: list
         A list full of dictionaries. Key=Column Name, Value=Value
+    debug: bool
+        Inserts rows one by one instead of using peewee bulk insert tools to help with problematic datasets
 
     Returns
     -------
@@ -114,6 +116,10 @@ def pull_data(file_result, function):
          Path to file to process
     function: Function
         Function that extracts the metadata to insert
+    
+    Returns
+    -------
+    None
     """
 
     try:
@@ -210,7 +216,7 @@ def populate_files(settings):
     Parameters
     ----------
     settings : dictionary
-        A dictionary of credentials for database log in.
+        A dictionary of credentials for database login.
     
     Returns
     -------
@@ -521,8 +527,7 @@ def find_flagged():
     
     Parameters
     ----------
-    args: Dict
-        Dictionary containing HV_LVL and segment combination.
+    None
 
     Returns
     -------
@@ -590,6 +595,15 @@ def find_flagged():
 def populate_hv_level(num_cpu):
     """
     Populate high voltage level table
+
+    Parameters
+    ----------
+    num_cpu: int
+        Number of worker processes
+    
+    Returns
+    -------
+    None
     """
     
     settings = get_settings()

@@ -13,12 +13,14 @@ import os
 from astropy.io import fits
 from datetime import datetime
 import glob
+import logging
 import numpy as np
 import sys
 
 from ..utils import enlarge, rebin
 from .constants import * #It's already been said
 
+logger = logging.getLogger(__name__)
 
 class Phaimage:
     """Creates a Phaimage object designed for use in the monitor.
@@ -248,7 +250,7 @@ class Phaimage:
         hdu_out.writeto(out_fits, overwrite=clobber)
         hdu_out.close()
 
-        print('WROTE: %s'% (out_fits))
+        logger.info('WROTE: {}'.format(out_fits))
 
 
 def make_phaimages(data_dir, clobber=False):
@@ -260,7 +262,7 @@ def make_phaimages(data_dir, clobber=False):
 
     for gainmap in all_gainmaps:
         if os.path.exists(Phaimage.outfile(gainmap)) and not clobber:
-            print(Phaimage.outfile(gainmap), 'Already exists. Skipping')
+            continue
         else:
             try:
                 inputs = Phaimage.inputs(gainmap)
@@ -269,7 +271,7 @@ def make_phaimages(data_dir, clobber=False):
 
             for item in inputs:
                 if not os.path.exists(item):
-                    print('Missing input: {}'.format(item))
+                    logger.info('MISSING INPUT: {}'.format(item))
                     continue
 
             phaimage = Phaimage(gainmap)

@@ -22,11 +22,11 @@ def plot_time(detector, dark, date, *args):
     
     Parameters
     ----------
-    detector : str
+    detector: str
         FUV or NUV
-    dark : array
+    dark: array
         dark measurements
-    date : array
+    date: array
         date for dark measurements
     *args
         Arbitrary number of arguments to pass to this function. 

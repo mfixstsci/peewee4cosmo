@@ -1,9 +1,7 @@
-import os
-import multiprocessing as mp
-import re
 import itertools
-
-#-------------------------------------------------------------------------------
+import multiprocessing as mp
+import os
+import re
 
 def find_all_datasets(top_dir, processes=2):
     """Find all of the files in the filesystem
@@ -36,7 +34,6 @@ def find_all_datasets(top_dir, processes=2):
 
     return results_as_list
 
-#-------------------------------------------------------------------------------
 
 def find_datasets(data_dir):
     """Iterator to yield all datasets recursively from the base.
@@ -64,5 +61,3 @@ def find_datasets(data_dir):
             datasets.append((root, filename))
 
     return datasets
-
-#-------------------------------------------------------------------------------

@@ -318,12 +318,12 @@ def pha_hist(filename):
 
     Parameters
     ----------
-    filename: str
+    filename : str
         Path to COS FUV corrtag
     
     Returns
     -------
-    counts: np.array
+    counts : np.array
         Array of values for PHA histogram.
     """
     
@@ -340,9 +340,9 @@ def plot_pha_hist(corrtag_a, corrtag_b):
     
     Parameters
     ----------
-    corrtag_a: str
+    corrtag_a : str
         Path to FUVA corrtag
-    corrtag_b: str
+    corrtag_b : str
         Path to FUVB corrtag
     
     Returns
@@ -392,11 +392,11 @@ def make_plots(detector, base_dir, **kwargs):
 
     Parameters
     ----------
-    detector: str
+    detector : str
         The COS mode trends you are interested in plotting.
-    base_dir: str
+    base_dir : str
         Directory you are interested in writing to.
-    **kwargs:
+    **kwargs : 
         Arbitrary keyword arguements.
 
     Returns
@@ -569,7 +569,7 @@ def move_products(base_dir, web_dir):
     ----------
     base_dir : str
         Directory where figures are located
-    web_dir : 
+    web_dir : str
         COS monitoring webpage directory.
 
     Returns

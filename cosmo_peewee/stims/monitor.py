@@ -48,14 +48,14 @@ def find_center(data):
 
     Parameters
     ----------
-    data: np.array
+    data : np.array
         2d array of counts
     
     Returns
     -------
-    x: int
+    x : int
         x position of the stim measurement
-    y: int
+    y : int
         y position of the stim measurement
     """
     
@@ -84,22 +84,22 @@ def brf_positions(brftab, segment, position):
 
     Parameters
     ----------
-    brftab: str
+    brftab : str
         Path to brf reference file.
-    segment: str
+    segment : str
         FUVA of FUVB.
-    position: str
+    position : str
         ul for upper left of lr for lower right.
 
     Returns
     -------
-    xmin: int
+    xmin : int
         Minimum x vertex that defines the box the stims should fall in
-    xmax: int
+    xmax : int
         Maximum x vertex that defines the box the stims should fall in
-    ymin: int
+    ymin : int
         Mimimum y vertex that defines the box the stims should fall in
-    ymax: int
+    ymax : int
         Maximum y vertex that defines the box the stims should fall in
     """
     brf = fits.getdata(brftab)
@@ -136,21 +136,31 @@ def find_stims(image, segment, stim, brf_file):
 
     Parameters
     ----------
-    image: np.array
+    image : np.array
         A numpy array of counts.
-    segment: str
+    segment : str
         FUVA or FUVB
-    stim: str
+    stim : str
         ul for upper left or lr for lower right
-    brf_file: str
+    brf_file : str
         Path to brf reference file.
+    
+    Returns
+    -------
+    x : float
+        x location of stim
+    y : float
+        y location of stim
+
     """
     x1, x2, y1, y2 = brf_positions(brf_file, segment, stim)
     found_x, found_y = find_center(image[y1:y2, x1:x2])
     if (not found_x) and (not found_y):
         return -999, -999
 
-    return found_x + x1, found_y + y1
+    x, y = found_x + x1, found_y + y1
+
+    return x, y
 
 
 def locate_stims(data_object, **kwargs):
@@ -160,14 +170,14 @@ def locate_stims(data_object, **kwargs):
 
     Parameters
     ----------
-    data_object: peewee row object
+    data_object : peewee row object
         Row from the cosmo database with path and filename attributes.
     **kwargs
         Arbitrary number of keyword arguements.
 
     Yields
     ------
-    info: dict
+    info : dict
         Dictionary with information that will make a row in the DB.
     """
 
@@ -275,14 +285,14 @@ def make_position_panel(segment, stim):
 
     Parameters
     ----------
-    segment: str
+    segment : str
         FUVA or FUVB
-    stim: str
+    stim : str
         upper left or lower right.
 
     Returns
     -------
-    p: bokeh panel
+    p : bokeh panel
         Panel containing scatter plot for stim/segment combo.
     """
     
@@ -447,10 +457,10 @@ def make_time_plot(segment, web_app=False):
 
     Parameters
     ----------
-    segment: str
+    segment : str
         FUVA or FUVB
 
-    web_app: bool
+    web_app : bool
         If using the webapp we want to return the bokeh figure.
 
     Returns
@@ -529,18 +539,18 @@ def make_stretch_panel(segment, left_stim, right_stim, reverse_stims=False):
 
     Parameters
     ----------
-    segment: str
+    segment : str
         FUVA or FUVB
-    left_stim: str
+    left_stim : str
         stim of lower coordinate value
-    right_stim: str
+    right_stim : str
         stim of higher coordinate value
-    reverse_stims: bool
+    reverse_stims : bool
         reverse the order the stims are subtracted from each other
     
     Returns
     -------
-    p: bokeh panel
+    p : bokeh panel
         Panel containing scatter of stretch vs. time
     """
     # Connect to DB

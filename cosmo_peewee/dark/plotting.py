@@ -123,7 +123,7 @@ def plot_histogram(dark, outname):
 
 
 def plot_time(detector, dark, date, *args):
-    """Plot the dar-rate vs time
+    """Plot the dark-rate vs time
 
     Parameters
     ----------
@@ -478,9 +478,18 @@ def plot_orbital_rate(longitude, latitude, darkrate, *args):
 
 
 def plot_spatial(filename):
-    
-    hdu = fits.open('/smov/cos/Data/11895/otfrdata/12-01-2014/\
-                    lb8s2mn9q_corrtag_a.fits.gz')
+    """Plot spatial dark variation (Developing)
+
+    Parameters
+    ----------
+    filename : str
+        file location
+
+    Returns
+    -------
+    None
+    """
+    hdu = fits.open(filename)
     segment = hdu[0].header['segment']
 
     #  Set boundaries based on segment/detector
@@ -506,17 +515,25 @@ def find_boundaries(img, xtractab, cenwave, aperture, segment):
 
     Parameters
     ----------
-    img: array-like
+    img : array-like
         2-D array of spectrum you wish to extract.
-    xtractab: str
+    xtractab : str
         COS Extraction Tab
-    cenwave: int
+    cenwave : int
         COS FUV cenwave
-    aperture: str
+    aperture : str
         COS aperture (BOA/PSA)
-    segment: str
+    segment : str
         FUVA or FUVB
+    
+    Returns
+    -------
+    min_y : int
+        Lower bound of extraction
+    max_y : int
+        Upper bound of extraction
     """
+
     lref_dir = "/grp/hst/cdbs/lref/"
     with fits.open(lref_dir+xtractab[5:]) as onedx:
         wh = np.where((onedx[1].data['CENWAVE'] == cenwave)
@@ -570,20 +587,20 @@ def extract_image(img, xtractab, cenwave, aperture, segment):
     
     Parameters
     ----------
-    img: array-like
+    img : array-like
         2-D COS FUV Image ([rawx,rawy] or [xcorr,ycorr])
-    xtractab: str
+    xtractab : str
         COS Extraction Tab
-    cenwave: int
+    cenwave : int
         COS FUV cenwave
-    aperture: str
+    aperture : str
         COS aperture (BOA/PSA)
-    segment: str
+    segment : str
         FUVA or FUVB
 
     Returns
     -------
-    collapsed_spec: array-like
+    collapsed_spec : array-like
         1-D spectrum
     """
 

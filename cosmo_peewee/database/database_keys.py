@@ -1,4 +1,7 @@
 """Open pull and return header keywords for specific tables.
+
+Some tables don't require any calculated calculated quantities. We just
+pull and return the meta data that is populat4ed in the headers.
 """
 
 import os
@@ -13,6 +16,10 @@ def nuv_corr_keys(file_result):
     file_result: tuple
         A tuple with a path and filename
     
+    Returns
+    -------
+    keywords: dict
+        A dictionary that populates table metadata rows
     """
 
     file_path = os.path.join(file_result.path, file_result.filename)
@@ -50,6 +57,11 @@ def fuva_raw_keys(file_result):
     file_result: tuple
         A tuple with a path and filename
     
+    Returns
+    -------
+    keywords: dict
+        A dictionary that populates table metadata rows
+    
     """
 
     file_path = os.path.join(file_result.path, file_result.filename)
@@ -73,6 +85,11 @@ def fuvb_raw_keys(file_result):
     file_result: tuple
         A tuple with a path and filename
     
+    Returns
+    -------
+    keywords: dict
+        A dictionary that populates table metadata rows
+    
     """
 
     file_path = os.path.join(file_result.path, file_result.filename)
@@ -95,6 +112,11 @@ def fuva_corr_keys(file_result):
     ----------
     file_result: tuple
         A tuple with a path and filename
+    
+    Returns
+    -------
+    keywords: dict
+        A dictionary that populates table metadata rows
     
     """
 
@@ -122,6 +144,11 @@ def fuvb_corr_keys(file_result):
     file_result: tuple
         A tuple with a path and filename
     
+    Returns
+    -------
+    keywords: dict
+        A dictionary that populates table metadata rows
+    
     """
 
     file_path = os.path.join(file_result.path, file_result.filename)
@@ -147,6 +174,11 @@ def obs_keys(file_result):
     ----------
     file_result: tuple
         A tuple with a path and filename
+    
+    Returns
+    -------
+    keywords: dict
+        A dictionary that populates table metadata rows
     
     """
 
@@ -197,6 +229,11 @@ def file_keys(file_result):
     file_result: tuple
         A tuple with a path and filename
     
+    Returns
+    -------
+    keywords: dict
+        A dictionary that populates table metadata rows
+    
     """
     path, filename = file_result
     
@@ -228,10 +265,16 @@ def file_keys(file_result):
 
 def hv_keys(file_result):
     """Keys for the high voltage monitor
+    
     Parameters
     ----------
     file_result: tuple
         A tuple with a path and filename
+    
+    Returns
+    -------
+    keywords: dict
+        A dictionary that populates table metadata rows
     """
 
     file_path = os.path.join(file_result.path, file_result.filename)

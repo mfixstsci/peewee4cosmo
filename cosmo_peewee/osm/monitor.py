@@ -165,9 +165,9 @@ def fit_data(xdata, ydata):
     Parameters
     ----------
     xdata : astropy.table.column.Column
-        A list of x values (time)
+        A list of x values
     ydata : astropy.table.column.Column
-        A list of y values (shifts)
+        A list of y values
 
     Returns
     -------
@@ -341,6 +341,11 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         The output directory for the files.
     detector : str
         FUV or NUV mode to make correct plot.
+    
+    Returns
+    -------
+    p: bokeh plot
+        Bokeh plot object.
     """
     
     logger.info("MAKING INTERACTIVE PLOT FOR {}".format(detector))
@@ -701,6 +706,10 @@ def make_plots(data, data_acqs, out_dir):
         A table of rawacqs metadata
     out_dir : str
         The output directory for the files.
+    
+    Returns
+    -------
+    None
     """
     
     logger.info("MAKING STATIC PLOTS")
@@ -1710,6 +1719,14 @@ def fp_diff(data):
 
 def monitor():
     """Run the entire suite of monitoring
+    
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
     """
 
     logger.info("STARTING MONITOR")
