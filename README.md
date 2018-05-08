@@ -26,9 +26,9 @@ resulting directory with `python setup.py install`
 
 # Usage
 
-> **TO USE THIS REPOSITORY FOR IT'S INTENDED USE YOU MUST BE A PART OF THE COS TEAM!**
+> **TO USE THIS REPOSITORY FOR IT'S INTENDED USE YOU MUST BE A PART OF THE COS TEAM!
 > BEFORE RUNNING YOU WILL NEED TO MAKE A CONFIGURATION FILE THAT WILL CONTAIN THE CREDENTIALS
-> TO LOG INTO THE DATABASE.
+> TO LOG INTO THE DATABASE.**
 
 peewee4cosmo is used via entry points when the package is installed. Here are the most used cases:
 
