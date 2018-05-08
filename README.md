@@ -84,8 +84,10 @@ Convenience functions for gain sag table and gain maps:
 ### cosmo_gsagtab_by_date
 This entry point allows users to create that show the gain sag progression over selected dates.
 
-![#f03c15]**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to show gain
+```
+**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to show gain
 sag progress of regions over the dates selected!**
+```
 
 By default we set the segment argument to be FUVB because of how quickly it degrades.
 
