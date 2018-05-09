@@ -21,7 +21,6 @@ from bokeh.plotting import figure
 from copy import deepcopy
 from datetime import datetime
 import matplotlib as mpl
-mpl.use('Agg') # Has to be before import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -35,7 +34,7 @@ from ..utils import remove_if_there
 
 logger = logging.getLogger(__name__)
 np.seterr(divide='ignore')
-
+np.warnings.filterwarnings('ignore') # Sometime the np.mean gets empty slice, its okay, just want to mute.
 
 def fppos_shift(lamptab_name, segment, opt_elem, cenwave, fpoffset):
     """Get the COS FPPOS pixel shift.

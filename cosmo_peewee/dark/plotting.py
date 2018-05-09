@@ -6,8 +6,6 @@ from __future__ import absolute_import, division
 import math
 import os
 
-import matplotlib as mpl
-mpl.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 import numpy as np

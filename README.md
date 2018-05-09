@@ -30,37 +30,13 @@ resulting directory with `python setup.py install`
 > BEFORE RUNNING YOU WILL NEED TO MAKE A CONFIGURATION FILE THAT WILL CONTAIN THE CREDENTIALS
 > TO LOG INTO THE DATABASE.**
 
-peewee4cosmo is used via entry points when the package is installed. Here are the most used cases:
+peewee4cosmo is used via entry point scripts when the package is installed. Here are the most used cases:
 
 `$ cm_ingest # This runs the ingestion process that pre-processes and store data in the tables.`
 
 `$ cm_monitors # This runs the monitors that print information to screen and creates figures.`
 
 Convenience functions for gain sag table and gain maps:
-
-    $ cosmo_gsagtab_by_date --help
-        usage: cosmo_gsagtab_by_date [-h] [--segment SEGMENT] [--min_date MIN_DATE]
-                             [--max_date MAX_DATE] [--compare COMPARE]
-
-        optional arguments:
-          -h, --help           show this help message and exit
-          --segment SEGMENT    FUVA or FUVB
-          --min_date MIN_DATE  Minimum date when gainsag holes appeared
-          --max_date MAX_DATE  Minimum date when gainsag holes appeared
-          --compare COMPARE    Compare to CRDS gsagtab
-
-    $ cosmo_gsagtab_residual_plot --help
-        usage: cosmo_gsagtab_residual_plot [-h] [--old_gsagtab OLD_GSAGTAB]
-                                   [--new_gsagtab NEW_GSAGTAB]
-                                   [--out_dir OUT_DIR]
-
-        optional arguments:
-          -h, --help            show this help message and exit
-          --old_gsagtab OLD_GSAGTAB
-                                Path to gsagtab
-          --new_gsagtab NEW_GSAGTAB
-                                Path to gsagtab
-          --out_dir OUT_DIR     Path you want to write plot out to.
 
     $ cosmo_gsagtab_creator --help
         usage: cosmo_gsagtab_creator [-h] [--out_directory OUT_DIRECTORY]
@@ -84,35 +60,31 @@ Convenience functions for gain sag table and gain maps:
           --gsagtab GSAGTAB  Path to gsagtab
           --hv_lvl HV_LVL    High Voltage Level
 
+    $ cosmo_gsagtab_residual_plot --help
+        usage: cosmo_gsagtab_residual_plot [-h] [--old_gsagtab OLD_GSAGTAB]
+                                   [--new_gsagtab NEW_GSAGTAB]
+                                   [--out_dir OUT_DIR]
+
+        optional arguments:
+          -h, --help            show this help message and exit
+          --old_gsagtab OLD_GSAGTAB
+                                Path to gsagtab
+          --new_gsagtab NEW_GSAGTAB
+                                Path to gsagtab
+          --out_dir OUT_DIR     Path you want to write plot out to.
+
+    $ cosmo_gsagtab_by_date --help
+        usage: cosmo_gsagtab_by_date [-h] [--segment SEGMENT] [--min_date MIN_DATE]
+                             [--max_date MAX_DATE] [--compare COMPARE]
+
+        optional arguments:
+          -h, --help           show this help message and exit
+          --segment SEGMENT    FUVA or FUVB
+          --min_date MIN_DATE  Minimum date when gainsag holes appeared
+          --max_date MAX_DATE  Minimum date when gainsag holes appeared
+          --compare COMPARE    Compare to CRDS gsagtab
+
 # Examples
-
-### cosmo_gsagtab_by_date
-This entry point allows users to create that show the gain sag progression over selected dates.
-
-#### NOTE:
->**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to show gain
->sag progress of regions over the dates selected!**
-
-By default we set the segment argument to be FUVB because of how quickly it degrades.
-
-    $ cosmo_gsagtab_by_date --min_date 55197 --max_date 55927
-    monitor_directory_from_configure.yaml/CCI/gsagtab_comparisons/gsag_by_date_55197-55927_167_FUVB.png
-    monitor_directory_from_configure.yaml/CCI/gsagtab_comparisons/gsag_by_date_55197-55927_175_FUVB.png
-
-For FUVB, the high voltage was raised over the time period we selected from 167 to 175.
-
-![Example Plot](docs/_static/gsag_by_date_55197-55927_167_FUVB.png "HV 167 FUVB over given time period.")
-![Example Plot](docs/_static/gsag_by_date_55197-55927_175_FUVB.png "HV 175 FUVB over given time period.")
-
-
-But you can select FUVA using the segment argument.
-
-    $ cosmo_gsagtab_by_date --min_date 55197 --max_date 55927 --segment FUVA
-    monitor_directory_from_configure.yaml/CCI/gsagtab_comparisons/gsag_by_date_55197-55927_169_FUVA.png
-
-FUVA was only operating at one high voltage over the same time period. Only one plot was created.
-
-![Example Plot](docs/_static/gsag_by_date_55197-55927_169_FUVA.png "HV 169 FUVA over given time period.")
 
 ### cosmo_gsagtab_residual_plot
 This entry point allows users to create figures that show the difference in gainsag between two different gain maps.
@@ -143,7 +115,7 @@ table up to the current time.
 The naming scheme for these files is `gsag_filter_dateTtime.fits`
 
 This will write the table out to the directory the user provides. If you are interested in a table that stops at
-a time that isn't the present you can use the `--by_date` and `tab_date` arguments.
+a time that isn't the present you can use the `--by_date` and `--tab_date` arguments.
 
 `cosmo_gsagtab_creator --out_dir /some/dir/you/like --by_date True --tab_date 57000.0`
 
@@ -168,6 +140,34 @@ This entry point creates a figure of the gain sag plotted on top of the gain map
 `$ open monitor_directory_from_configure.yaml/CCI/gainmap_gsagtab_delivery_plots/gainmap_gsag_filter_2018-05-07T11-48-22.542754_163.png`
 
 ![Example Plot](docs/_static/gainmap_gsag_filter_2018-05-07T11-48-22.542754_163.png "Plot of gain map with gain sag overplotted for table and high voltage provided.")
+
+### cosmo_gsagtab_by_date
+This entry point allows users to create that show the gain sag progression over selected dates.
+
+#### NOTE:
+>**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to show gain
+>sag progress of regions over the dates selected!**
+
+By default we set the segment argument to be FUVB because of how quickly it degrades.
+
+    $ cosmo_gsagtab_by_date --min_date 55197 --max_date 55927
+    monitor_directory_from_configure.yaml/CCI/gsagtab_comparisons/gsag_by_date_55197-55927_167_FUVB.png
+    monitor_directory_from_configure.yaml/CCI/gsagtab_comparisons/gsag_by_date_55197-55927_175_FUVB.png
+
+For FUVB, the high voltage was raised over the time period we selected from 167 to 175.
+
+![Example Plot](docs/_static/gsag_by_date_55197-55927_167_FUVB.png "HV 167 FUVB over given time period.")
+![Example Plot](docs/_static/gsag_by_date_55197-55927_175_FUVB.png "HV 175 FUVB over given time period.")
+
+
+But you can select FUVA using the segment argument.
+
+    $ cosmo_gsagtab_by_date --min_date 55197 --max_date 55927 --segment FUVA
+    monitor_directory_from_configure.yaml/CCI/gsagtab_comparisons/gsag_by_date_55197-55927_169_FUVA.png
+
+FUVA was only operating at one high voltage over the same time period. Only one plot was created.
+
+![Example Plot](docs/_static/gsag_by_date_55197-55927_169_FUVA.png "HV 169 FUVA over given time period.")
 
 # Build status
 

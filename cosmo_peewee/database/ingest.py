@@ -769,9 +769,9 @@ def run_monitors():
     settings = get_settings()
     setup_logging()
     
-    # osm_monitor()
-    # dark_monitor()
-    # stim_monitor()
-    cci_main(os.path.join(settings['monitor_location'], 'CCI'), 
+    osm_monitor()
+    dark_monitor()
+    stim_monitor()
+    cci_main(os.path.join(settings['monitor_location'], 'CCI'),
              hotspot_filter=True)
-    # hvlvl_monitor()
+    hvlvl_monitor()
