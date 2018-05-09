@@ -86,25 +86,6 @@ Convenience functions for gain sag table and gain maps:
 
 # Examples
 
-### cosmo_gsagtab_residual_plot
-This entry point allows users to create figures that show the difference in gainsag between two different gain maps.
-
-#### NOTE:
->**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to
->show the difference between two gain sag tables!**
-
-`$ cosmo_gsagtab_residual_plot --old_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-02-05T16-42-01.
-353932.fits --new_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-05-07T11-48-22.542754.fits
---out_dir /some/dir/you/like`
-
-
-If there are any difference in other high voltage levels in the tables, a plot with the naming convention
-`gsagtab_residual_comparion_segment_hv_lvl.png` will be written to `/some/dir/you/like`. Here we selected one
-of the high voltage levels (169) for this example.
-
-![Example Plot](docs/_static/gsagtab_residual_comparion_FUVB_169.png "Differences in gain sag tables for FUVB 169.")
-
-
 ### cosmo_gsagtab_creator
 This entry point allows users to create gain sag tables up to a certain date. This functionality is great for making
 gain sag tables on the fly. The defaults settings will make a filtered (Checks for hot spot recovery) gain sag
@@ -140,6 +121,24 @@ This entry point creates a figure of the gain sag plotted on top of the gain map
 `$ open monitor_directory_from_configure.yaml/CCI/gainmap_gsagtab_delivery_plots/gainmap_gsag_filter_2018-05-07T11-48-22.542754_163.png`
 
 ![Example Plot](docs/_static/gainmap_gsag_filter_2018-05-07T11-48-22.542754_163.png "Plot of gain map with gain sag overplotted for table and high voltage provided.")
+
+### cosmo_gsagtab_residual_plot
+This entry point allows users to create figures that show the difference in gainsag between two different gain maps.
+
+#### NOTE:
+>**The gain map is the most up-to-date gain map. Other regions maybe sagged but the purpose of this plot is to
+>show the difference between two gain sag tables!**
+
+`$ cosmo_gsagtab_residual_plot --old_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-02-05T16-42-01.
+353932.fits --new_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-05-07T11-48-22.542754.fits
+--out_dir /some/dir/you/like`
+
+
+If there are any difference in other high voltage levels in the tables, a plot with the naming convention
+`gsagtab_residual_comparion_segment_hv_lvl.png` will be written to `/some/dir/you/like`. Here we selected one
+of the high voltage levels (169) for this example.
+
+![Example Plot](docs/_static/gsagtab_residual_comparion_FUVB_169.png "Differences in gain sag tables for FUVB 169.")
 
 ### cosmo_gsagtab_by_date
 This entry point allows users to create that show the gain sag progression over selected dates.
