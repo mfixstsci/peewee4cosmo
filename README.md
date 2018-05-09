@@ -123,11 +123,11 @@ This entry point allows users to create figures that show the difference in gain
 
 `$ cosmo_gsagtab_residual_plot --old_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-02-05T16-42-01.
 353932.fits --new_gsagtab monitor_directory_from_configure.yaml/CCI/gsag_filter_2018-05-07T11-48-22.542754.fits
---out_dir some/dir/you/like`
+--out_dir /some/dir/you/like`
 
 
 If there are any difference in other high voltage levels in the tables, a plot with the naming convention
-`gsagtab_residual_comparion_segment_hv_lvl.png` will be written to the out_dir provided. Here we selected one
+`gsagtab_residual_comparion_segment_hv_lvl.png` will be written to `/some/dir/you/like`. Here we selected one
 of the high voltage levels (169) for this example.
 
 ![Example Plot](docs/_static/gsagtab_residual_comparion_FUVB_169.png "Differences in gain sag tables for FUVB 169.")
