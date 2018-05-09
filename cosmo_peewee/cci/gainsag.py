@@ -272,7 +272,7 @@ def in_boundary(segment, ly, dy):
     return False
 
 
-def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=57322.0):
+def make_gsagtab_db(out_dir, blue=False, filter=True, by_date=False, tab_date=57322.0):
     """Creates GSAGTAB from Flagged_Pixel DB table.
 
     Parameters
@@ -280,11 +280,11 @@ def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=5
     out_dir: str
         Directory to write figures/files out to
     blue: bool
-        If true make bluemode maps
+        If true make blue mode maps
     filter: bool
         If filter, check pixels for temporary sagging
     by_date: bool
-        Bool to make gainsagtab up to specific date.
+        Bool to make gain sag table up to specific date.
     tab_date: float
         Specific date for GSAGTAB to be created to. 
     
@@ -311,7 +311,9 @@ def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=5
     
     out_fits = os.path.join(out_dir, filename)
 
-    #-- Begin header data.
+    logger.info('CREATING GSAGTAB {}'.format(out_fits))
+
+    # Begin header data.
     hdu_out=fits.HDUList(fits.PrimaryHDU())
     date_time = str(datetime.now())
     date_time = date_time.split()[0]+'T'+date_time.split()[1]
@@ -348,7 +350,6 @@ def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=5
                                                                     179))))
 
     # Connect to database.
-    settings = get_settings()
     database = get_database()
     database.connect()
 
@@ -358,7 +359,9 @@ def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=5
     # Put segments in list.
     segments = [row.segment for row in segment_results]
 
-    # For each segment, loop through all the possible HVs and create 
+    logger.info('GATHERING SAGGED PIXELS... THIS CAN TAKE A FEW MINUTES')
+
+    # For each segment, loop through all the possible HVs and create
     # an extension in the GSAGTAB.
     for segment in segments:
         hvlevel_string = 'HVLEVEL' + segment[-1].upper()
@@ -475,6 +478,7 @@ def make_gsagtab_db(out_dir, blue=False, filter=False, by_date=False, tab_date=5
     database.close()
     hdu_out.writeto(out_fits, overwrite=True)
     logger.info('WROTE: GSAGTAB to %s'%(out_fits))
+
     return out_fits
 
 
@@ -493,7 +497,6 @@ def check_pixel_recovery(segment):
     """
 
     # Connect to database
-    settings = get_settings()
     database = get_database()
     database.connect()
     
@@ -527,7 +530,6 @@ def check_pixel_recovery(segment):
     # Organize all of the pixels by segment.
     for d in gain_measurements:
         result[d['segment'], d['x'], d['y']].append(d)
-
 
     # For every segment,x,y combo check the latest measurements
     for combo in result.keys():
@@ -566,8 +568,7 @@ def check_pixel_recovery(segment):
 
 
 def make_gsagtab_db_entry():
-    """
-    Entry Point for gsagtab creation. Able to pass arguments via command line.
+    """Entry Point for gsagtab creation. Able to pass arguments via command line.
 
     Parameters
     ----------
@@ -579,7 +580,7 @@ def make_gsagtab_db_entry():
     """
     
     parser = argparse.ArgumentParser()
-    
+
     parser.add_argument('--out_directory',
                         type=str,
                         help="Path you want to write gsagtab out to.")
@@ -587,7 +588,7 @@ def make_gsagtab_db_entry():
     # For dates, defaults give sagging activity over the past 10 days.
     parser.add_argument('--filter',
                         type=bool,
-                        default=False,
+                        default=True,
                         help="Do you want to filter the gainsag tab?")
     
     parser.add_argument('--blue',
@@ -603,11 +604,11 @@ def make_gsagtab_db_entry():
     
     parser.add_argument('--tab_date',
                         type=float,
-                        default=57322.0,
+                        default=Time(str(datetime.now()), format='iso').mjd,
                         help="Date to make table up to.")
 
     args = parser.parse_args()
 
     # Make gain sag table.
-    make_gsagtab_db(args.out_directory, blue=args.blue, filter=args.filter, 
+    make_gsagtab_db(args.out_directory, blue=args.blue, filter=args.filter,
                     by_date=args.by_date, tab_date=args.tab_date )

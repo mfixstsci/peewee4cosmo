@@ -135,7 +135,26 @@ of the high voltage levels (169) for this example.
 
 ### cosmo_gsagtab_creator
 This entry point allows users to create gain sag tables up to a certain date. This functionality is great for making
-gain sag tables on the fly.
+gain sag tables on the fly. The defaults settings will make a filtered (Checks for hot spot recovery) gain sag
+table up to the current time.
+
+`cosmo_gsagtab_creator --out_dir /some/dir/you/like`
+
+The naming scheme for these files is `gsag_filter_dateTtime.fits`
+
+This will write the table out to the directory the user provides. If you are interested in a table that stops at
+a time that isn't the present you can use the `--by_date` and `tab_date` arguments.
+
+`cosmo_gsagtab_creator --out_dir /some/dir/you/like --by_date True --tab_date 57000.0`
+
+This will write the table `gsag_smov_to_57000.0_filter.fits` out to `/some/dir/you/like` and will only include sagging
+until MJD 57000.0. The COS pipeline handles data taken with the blue modes (Cenwave 1055 - 1096) require a seperate gain
+sag table. You can create this table by using the `--blue` argument.
+
+`cosmo_gsagtab_creator --out_dir /some/dir/you/like --blue True`
+
+This will write the blue mode gain sag table `gsag_filter_dateTtime_blue.fits` out to `/some/dir/you/like` that is up
+to the current date.
 
 ### cosmo_gainmap_gsag_plot
 This entry point creates a figure of the gain sag plotted on top of the gain map for a specific high voltage level.
