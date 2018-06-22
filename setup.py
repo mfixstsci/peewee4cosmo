@@ -36,9 +36,9 @@ setup(
                         'pymysql',
                         'matplotlib',
                         'scipy',
-                        'psutil'
-                        'networkx'
-                        'fitsio'
+                        'psutil',
+                        'networkx',
+                        'fitsio',
                         'msgpack'
                         ]
     )
