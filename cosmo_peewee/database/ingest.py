@@ -20,7 +20,6 @@ import types
 
 from ..cci.gainmap import write_and_pull_gainmap
 from ..cci.gainsag import main as cci_main
-from ..cci.find_bad_pix import populate_bad_pix
 from ..cci.constants import *
 from ..cci.trend_pixels import main as time_trends
 
