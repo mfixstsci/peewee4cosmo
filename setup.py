@@ -32,10 +32,13 @@ setup(
     install_requires = ['setuptools',
                         'numpy>=1.11.1',
                         'astropy>=1.0.1',
-                        'peewee>=2.8.5',
+                        'peewee==2.10.2',
                         'pymysql',
                         'matplotlib',
                         'scipy',
                         'psutil'
+                        'networkx'
+                        'fitsio'
+                        'msgpack'
                         ]
     )
