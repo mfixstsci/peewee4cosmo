@@ -40,6 +40,7 @@ setup(
                         'networkx',
                         'fitsio',
                         'msgpack',
-                        'seaborn'
+                        'seaborn',
+                        'bokeh'
                         ]
     )

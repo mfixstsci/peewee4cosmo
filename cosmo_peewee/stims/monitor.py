@@ -14,8 +14,8 @@ from astropy import table
 from astropy.io import fits
 from astropy.table import Table
 from astropy.time import Time
-from bokeh.io import output_file, show, save, gridplot
-from bokeh.layouts import column, row
+from bokeh.io import output_file, show, save
+from bokeh.layouts import column, row, gridplot
 from bokeh.models import Range1d, HoverTool, BoxSelectTool, ColumnDataSource,\
                          OpenURL, TapTool, Div, Button, CustomJS
 from bokeh.plotting import figure
