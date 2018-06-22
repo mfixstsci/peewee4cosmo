@@ -41,6 +41,7 @@ setup(
                         'fitsio',
                         'msgpack',
                         'seaborn',
-                        'bokeh'
+                        'bokeh',
+                        'flask'
                         ]
     )
