@@ -120,7 +120,8 @@ This entry point creates a figure of the gain sag plotted on top of the gain map
 
 `$ open monitor_directory_from_configure.yaml/CCI/gainmap_gsagtab_delivery_plots/gainmap_gsag_filter_2018-05-07T11-48-22.542754_163.png`
 
-![Example Plot](docs/_static/gainmap_gsag_filter_2018-05-07T11-48-22.542754_163.png "Plot of gain map with gain sag overplotted for table and high voltage provided.")
+![Example Plot](docs/_static/gainmap_gsag_filter_2018-05-07T11-48-22.542754_163.png "Plot of gain map with gain sag over
+plotted for table and high voltage provided.")
 
 ### cosmo_gsagtab_residual_plot
 This entry point allows users to create figures that show the difference in gainsag between two different gain maps.

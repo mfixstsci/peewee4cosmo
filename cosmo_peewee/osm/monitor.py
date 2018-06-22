@@ -34,7 +34,8 @@ from ..utils import remove_if_there
 
 logger = logging.getLogger(__name__)
 np.seterr(divide='ignore')
-np.warnings.filterwarnings('ignore') # Sometime the np.mean gets empty slice, its okay, just want to mute.
+np.warnings.filterwarnings('ignore') 
+# Sometime the np.mean gets empty slice, its okay, just want to silence output.
 
 def fppos_shift(lamptab_name, segment, opt_elem, cenwave, fpoffset):
     """Get the COS FPPOS pixel shift.
@@ -68,7 +69,6 @@ def fppos_shift(lamptab_name, segment, opt_elem, cenwave, fpoffset):
 
     return offset
 
-
 def pull_flashes(filename):
     """Calculate lampflash values for given file
 
@@ -96,8 +96,7 @@ def pull_flashes(filename):
                     'opt_elem': hdu[0].header['OPT_ELEM'],
                     'cenwave': hdu[0].header['CENWAVE'],
                     'fppos': hdu[0].header.get('FPPOS', None),
-                    'filetype': hdu[0].header.get('FILETYPE', None),
-                    'life_adj': hdu[0].header.get('LIFE_ADJ')}
+                    'filetype': hdu[0].header.get('FILETYPE', None)}
 
         # Get time, and then convert the format
         t = Time(out_info['date'], format='mjd')
@@ -105,6 +104,7 @@ def pull_flashes(filename):
 
         # Open lampflash
         if '_lampflash.fits' in filename.filename:
+            out_info['life_adj'] = hdu[0].header.get('LIFE_ADJ')
             out_info['segment'] = hdu[0].header['SEGMENT']
             # Get lamptab file
             out_info['lamptab'] = hdu[0].header['LAMPTAB'].split('$')[-1]
@@ -113,7 +113,8 @@ def pull_flashes(filename):
             fpoffset = out_info['fppos'] - 3
 
             for i, line in enumerate(hdu[1].data):
-                # Count the number of flashes and set dictionary values.
+                # 'flash' counts the number of flashes in a lampflash
+                # x_shift (dispersion axis) if the calculated shift for the monitor.
                 out_info['flash'] = (i // 2) + 1
                 out_info['x_shift'] = line['SHIFT_DISP'] \
                                       - fppos_shift(out_info['lamptab'],
@@ -139,7 +140,7 @@ def pull_flashes(filename):
             out_info['fppos'] = -1
             out_info['flash'] = 1
 
-            #-- Grab associated spt
+            # Grab associated spt
             spt = fits.open(os.path.join(filename.path,
                                          filename.filename.replace('rawacq', 
                                                                    'spt')))
@@ -187,7 +188,6 @@ def fit_data(xdata, ydata):
 
     return fit, xdata, parameters, err
 
-
 def make_shift_table(db_table):
     """ Make an astropy table of shift values and other metadata
     
@@ -210,6 +210,7 @@ def make_shift_table(db_table):
     # this is a crude implementation, but it lets me use the rest of the
     # plotting code as-is
 
+    # I dont think this will work with python 3 :(
     # .dicts() returns the result objects as dictionaries. 
     for i, row in enumerate(db_table.select().dicts()):
         data.append(row.values())
@@ -223,7 +224,6 @@ def make_shift_table(db_table):
     data = Table(rows=data, names=keys)
 
     return data
-
 
 def make_panel(data, **kwargs):
     """Make a bokeh panel for figure.
@@ -325,7 +325,6 @@ def make_panel(data, **kwargs):
     taptool.callback = OpenURL(url=url)
     
     return panel
-
 
 def make_interactive_plots(data, data_acqs, out_dir, detector):
     """Make interactive plots for OSM shifts  
@@ -693,7 +692,6 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
 
         return p        
 
-
 def make_plots(data, data_acqs, out_dir):
     """Make plots for OSM shifts  
     
@@ -843,10 +841,10 @@ def make_plots(data, data_acqs, out_dir):
         axis.legend(bbox_to_anchor=(1,1), loc='upper left', ncol=1, 
                     numpoints=1, shadow=True,prop={'size':10})
 
-    remove_if_there(os.path.join(out_dir,'FUV_shifts.png'))
-    fig.savefig(os.path.join(out_dir,'FUV_shifts.png'))
+    remove_if_there(os.path.join(out_dir,'FUV_new_ds_shifts.png'))
+    fig.savefig(os.path.join(out_dir,'FUV_new_ds_shifts.png'))
     plt.close(fig)
-    os.chmod(os.path.join(out_dir,'FUV_shifts.png'),0o766)
+    os.chmod(os.path.join(out_dir,'FUV_new_ds_shifts.png'),0o766)
 
     # Make table for current reference file
     wcptab = fits.getdata(os.path.join(settings['lref'], 
@@ -1055,12 +1053,12 @@ def make_plots(data, data_acqs, out_dir):
     ax.set_xlabel('Date [MJD]', fontsize=20, fontweight='bold')
     #ax.set_ylim(260, 400)
 
-    remove_if_there(os.path.join(out_dir, 'NUV_shifts.png'))
-    fig.savefig(os.path.join(out_dir, 'NUV_shifts.png'),
+    remove_if_there(os.path.join(out_dir, 'NUV_new_ds_shifts.png'))
+    fig.savefig(os.path.join(out_dir, 'NUV_new_ds_shifts.png'),
                 bbox_inches='tight',
                 pad_inches=.5)
     plt.close(fig)
-    os.chmod(os.path.join(out_dir, 'NUV_shifts.png'),0o766)
+    os.chmod(os.path.join(out_dir, 'NUV_new_ds_shifts.png'),0o766)
 
     ##############
 
@@ -1272,7 +1270,7 @@ def make_plots_per_fppos(data, out_dir):
         fig.savefig(os.path.join(out_dir, filename))
         plt.close(fig)
         os.chmod(os.path.join(out_dir, filename), 0o766)
-#----------------------------------------------------------
+
 def make_plots_per_cenwave(data, out_dir):
     """Plot shift vs time for different cenwaves.
     """
@@ -1657,8 +1655,6 @@ def make_plots_per_cenwave(data, out_dir):
                     f.savefig(filename)
                     plt.close(f)
 
-    
-#----------------------------------------------------------
 def fp_diff(data):
     index = np.where((data['detector'] == 'FUV'))[0]
     data = data[index]
@@ -1715,7 +1711,6 @@ def fp_diff(data):
         plt.close()
         os.chmod(os.path.join(out_dir, 'difference_%s.pdf' % (cenwave)), 0o766)
 
-
 def monitor():
     """Run the entire suite of monitoring
     
@@ -1744,7 +1739,7 @@ def monitor():
     flash_data = make_shift_table(Lampflash)
     rawacq_data = make_shift_table(Rawacqs)
     
-    # ascii.write(flash_data, os.path.join(monitor_dir,'monitor_db_table.csv'), 
+    # ascii.write(flash_data, os.path.join(monitor_dir,'monitor_db_table.csv'),
     #             format='csv', overwrite=True)
 
     # Make static plots.

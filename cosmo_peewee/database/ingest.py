@@ -27,14 +27,18 @@ from ..cci.trend_pixels import main as time_trends
 from ..dark.monitor import monitor as dark_monitor
 from ..dark.monitor import pull_orbital_info
 
+# from .database_keys import file_keys
+from .database_keys import new_file_keys as file_keys
 from .database_keys import nuv_corr_keys, fuva_raw_keys, fuvb_raw_keys
 from .database_keys import fuva_corr_keys, fuvb_corr_keys, obs_keys
-from .database_keys import file_keys, hv_keys
+from .database_keys import hv_keys
 
 from ..filesystem import find_all_datasets
 
+# from .models import Files
+from .models import New_Files as Files
 from .models import get_database, get_settings
-from .models import Files, NUV_corr_headers, FUVA_raw_headers, FUVB_raw_headers
+from .models import NUV_corr_headers, FUVA_raw_headers, FUVB_raw_headers
 from .models import FUVA_corr_headers, FUVB_corr_headers, Lampflash, Rawacqs
 from .models import Darks, Stims, Observations, Gain, Flagged_Pixels
 from .models import Hv_Level
@@ -84,6 +88,7 @@ def bulk_insert(table, data_source, debug=False):
                 logger.warning(
                     'FILE: {} FAILED INSERTION'\
                     .format(item['filename']))
+                print(item)
         database.close()
     
     # Bulk inserts.
@@ -250,21 +255,17 @@ def populate_files(settings):
         
     # pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=settings['num_cpu'])
-    data_to_insert = pool.map(partial, files_to_add)    
- 
-    # DB times out if all tables are nuked.
-    # Seems to be the best method but don't know how to get it to work...
-    if len(data_to_insert):
-        # Little if else logic to avoid Integrity Errors not allowing 
-        # good files to be ingested
-        if len(files_to_add) < 10000:
-            step = 1
-        else:
-            step = 100
 
-        # Pass to bulk insert.
-        for idx in range(0, len(list(data_to_insert)), step):    
-            bulk_insert(Files, itertools.chain(*data_to_insert[idx:idx+step]))
+    if len(files_to_add) > 10000:
+        step = 100
+    else:
+        step = 1
+
+    for idx in range(0, len(list(files_to_add)), step):
+        logger.info('INSERTING {} TO {} OUT OF {} TOTAL'.format(idx, idx+step, len(files_to_add)))
+
+        data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
+        bulk_insert(Files, itertools.chain(*data_to_insert), debug=True)
 
 
 def populate_tables(table, table_keys, search_str, num_cpu=2):
@@ -314,10 +315,10 @@ def populate_tables(table, table_keys, search_str, num_cpu=2):
     # Else, the tables should look like this
     else:
         files_to_add = (Files.select().where(
-                                Files.filename.contains(search_str) 
-                                & Files.rootname.not_in(
-                                    table.select(table.rootname))
-                                & (Files.monitor_flag == True)))
+                            Files.filename.contains(search_str)
+                            & Files.rootname.not_in(
+                                table.select(table.rootname))
+                            & Files.monitor_flag == True))
     database.close()
     
     partial = functools.partial(pull_data,
@@ -347,11 +348,10 @@ def populate_osm(num_cpu=2):
     database.connect()
 
     files_to_add = (Files.select().where(
-                        Files.filename.contains('%lampflash%.gz') 
-                        & Files.filename.not_in(
-                            Lampflash.select(Lampflash.filename))
-                        & (Files.monitor_flag == True)))
-
+                                Files.filename.contains('%lampflash%.gz')
+                                & Files.filename.not_in(
+                                    Lampflash.select(Lampflash.filename))
+                                & Files.monitor_flag == True))
     database.close()
 
     partial = functools.partial(pull_data,
@@ -382,10 +382,10 @@ def populate_acqs(num_cpu=2):
     database.connect()
 
     files_to_add = (Files.select().where(
-                        Files.filename.contains('%rawacq%.gz') 
-                        & Files.filename.not_in(
-                            Rawacqs.select(Rawacqs.filename))
-                        & (Files.monitor_flag == True)))
+                                Files.filename.contains('%rawacq%.gz')
+                                & Files.filename.not_in(
+                                    Rawacqs.select(Rawacqs.filename))
+                                & Files.monitor_flag == True))
     
     database.close()
  
@@ -471,7 +471,7 @@ def populate_stims(num_cpu=2):
         data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
         
         if len(data_to_insert):
-            bulk_insert(Stims, itertools.chain(*data_to_insert))
+            bulk_insert(Stims, itertools.chain(*data_to_insert), debug=True)
 
 
 def populate_gain(num_cpu=2):
@@ -502,19 +502,16 @@ def populate_gain(num_cpu=2):
 
     database.close()
     
-    for f in files_to_add:
-    	print(f.filename)
-    
     partial = functools.partial(pull_data,
                                 function=write_and_pull_gainmap)
     pool = mp.Pool(processes=num_cpu)
 
     step=10
     for idx in range(0, len(list(files_to_add)), step):
-    	data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
-    	
-    	if len(data_to_insert):
-	   		bulk_insert(Gain, itertools.chain(*data_to_insert))
+        data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
+
+        if len(data_to_insert):
+            bulk_insert(Gain, itertools.chain(*data_to_insert))
 
 
 def find_flagged():
@@ -660,9 +657,9 @@ def ingest_all():
     tables = [Files,
               Observations,
               NUV_corr_headers,
-              FUVA_raw_headers, 
+              FUVA_raw_headers,
               FUVB_raw_headers,
-              FUVA_corr_headers, 
+              FUVA_corr_headers,
               FUVB_corr_headers,
               Lampflash,
               Rawacqs,
@@ -684,39 +681,35 @@ def ingest_all():
     logger.info("INGESTING FILES FROM: {}".format(settings['data_location']))
     populate_files(settings)
 
-    # Observation table    
-    # Replacing the fuv_primary_headers and nuv_raw_headers and combining.
+    # Observation table
     logger.info("POPULATING OBSERVATION TABLE")
-
     # if raw file types don't exist, then whats the point...?
     filetypes = ['%rawacq.fits.gz',
                  '%lampflash.fits.gz',
                  '%rawaccum.fits.gz',
-                 '%rawtag.fits.gz', 
-                 '%rawtag_a.fits.gz', 
+                 '%rawtag.fits.gz',
+                 '%rawtag_a.fits.gz',
                  '%rawtag_b.fits.gz']
-
     for file_type in filetypes:
         populate_tables(Observations, obs_keys, file_type, settings['num_cpu'])
 
-    # NUV corrtag headers    
+    # # NUV corrtag headers
     logger.info("POPULATING NUV CORRTAGS")
-    populate_tables(NUV_corr_headers, nuv_corr_keys, 
+    populate_tables(NUV_corr_headers, nuv_corr_keys,
                     '%_corrtag.fits.gz%', settings['num_cpu'])
 
-    # FUV rawtag headers    
+    # FUV rawtag headers
     logger.info("POPULATING FUV RAWTAG HEADERS")
-
-    populate_tables(FUVA_raw_headers, fuva_raw_keys, 
+    populate_tables(FUVA_raw_headers, fuva_raw_keys,
                     '%rawtag_a.fits.gz%', settings['num_cpu'])
-    populate_tables(FUVB_raw_headers, fuvb_raw_keys, 
+    populate_tables(FUVB_raw_headers, fuvb_raw_keys,
                     '%rawtag_b.fits.gz%', settings['num_cpu'])
 
-    # FUV corrtag headers    
+    # FUV corrtag headers
     logger.info("POPULATING FUV CORRTAGS")
-    populate_tables(FUVA_corr_headers, fuva_corr_keys, 
+    populate_tables(FUVA_corr_headers, fuva_corr_keys,
                     '%corrtag_a.fits.gz%', settings['num_cpu'])
-    populate_tables(FUVB_corr_headers, fuvb_corr_keys, 
+    populate_tables(FUVB_corr_headers, fuvb_corr_keys,
                     '%corrtag_b.fits.gz%', settings['num_cpu'])
 
     # Populate rawacq monitor meta
@@ -730,11 +723,11 @@ def ingest_all():
     # Populate Darks monitor meta
     logger.info("POPULATING DARKS TABLE")
     populate_darks(settings['num_cpu'])
-    
+
     # Populate Stim monitor
     logger.info("POPULATING STIM TABLE")
     populate_stims(settings['num_cpu'])
-
+    
     # Populate gain monitor
     logger.info("POPULATING GAIN TABLE")
     populate_gain(settings['num_cpu'])
@@ -748,11 +741,12 @@ def ingest_all():
     # if date.today().weekday() == 0:
     #     logger.info("POPULATING GAIN TRENDS TABLE")
     #     time_trends()
-
+    
     logger.info("POPULATING HV LEVEL TABLE")
     populate_hv_level(settings['num_cpu'])
 
     logger.info("INGESTION COMPLETE")
+
 
 def run_monitors():
     """Run all COS Monitors

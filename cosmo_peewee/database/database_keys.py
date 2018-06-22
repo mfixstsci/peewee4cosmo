@@ -5,8 +5,9 @@ pull and return the meta data that is populat4ed in the headers.
 """
 
 import os
-from astropy.io import fits
 
+from astropy.io import fits
+import gc
 
 def nuv_corr_keys(file_result):
     """Keys for COS NUV corrtags
@@ -298,4 +299,37 @@ def hv_keys(file_result):
             keywords['dethvn'] = hdu[1].header['dethvnb']
             keywords['hvlevel'] = hdu[1].header['hvlevelb']
     
+    return keywords
+
+
+def new_file_keys(file_result):
+    path, filename = file_result
+
+    try:
+        # Set hard keys...
+        keywords = {'path': path,
+                    'filename': filename}
+
+        # If no data, whoops, flag is false
+        data = fits.getdata(os.path.join(path, filename))
+        if not len(data):
+            keywords['monitor_flag'] = False
+        else:
+            # Hey, looks like it opens and has data
+            keywords['monitor_flag'] = True
+
+        del data
+        gc.collect()
+
+    # Sorry, file won't open or doesn't have data...
+    except (IOError, TypeError, ValueError, IndexError):
+        keywords['monitor_flag'] = False
+
+    # Add rootname to table
+    rootname = filename.split('_')[0]
+    if not len(rootname) == 9:
+        rootname = None
+
+    keywords['rootname'] = rootname
+
     return keywords

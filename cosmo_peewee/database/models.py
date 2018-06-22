@@ -423,3 +423,13 @@ class Hv_Level(BaseModel):
                                on_delete='CASCADE')
     class Meta:
         db_table = 'high_voltage'
+
+class New_Files(BaseModel):
+    """Main files table"""
+    path = CharField()
+    filename = CharField(primary_key=True)
+    rootname = CharField(null=True)
+    monitor_flag = BooleanField()
+
+    class Meta:
+        db_table = 'new_files'

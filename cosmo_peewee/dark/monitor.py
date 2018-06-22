@@ -198,8 +198,11 @@ def pull_orbital_info(data_object, step=25):
         timeline = hdu['timeline'].data
         segment = hdu[0].header['segment']
     except KeyError:
+        info['detector'] = hdu[0].header['segment']
+        info['rootname'] = hdu[0].header['rootname']
+        info['targname'] = hdu[0].header['targname']
+        info['temp'] = get_temp(full_path)
         logger.debug("NO TIMELINE EXTENSION FOUND FOR: {}".format(full_path))
-        print(info)
         yield info
         raise StopIteration
 
@@ -256,7 +259,6 @@ def pull_orbital_info(data_object, step=25):
     if not len(times):
         logger.debug("TIME ARRAY EMPTY FOR: {}".format(full_path))
         blank = np.array([0])
-        print(info)
         yield info
         raise StopIteration
 

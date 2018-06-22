@@ -64,7 +64,7 @@ def plot_hv_levels(data):
     figname = os.path.join(settings['monitor_location'], 
                            'hvlvl', 
                            'hv_vs_time_{}.png'.format(segment[0]))
-    plt.savefig(figname)
+    plt.savefig(figname, bbox_inches='tight', dpi = 300)
     plt.close(f)
 
     # Plot HV Residuals vs time
@@ -106,7 +106,7 @@ def plot_hv_levels(data):
     figname = os.path.join(settings['monitor_location'],
                            'hvlvl',
                            'hv_in_volts_residuals_{}.png'.format(segment[0]))
-    plt.savefig(figname)
+    plt.savefig(figname, bbox_inches='tight', dpi = 300)
     plt.close(f)
     
 
