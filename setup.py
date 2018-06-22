@@ -39,6 +39,7 @@ setup(
                         'psutil',
                         'networkx',
                         'fitsio',
-                        'msgpack'
+                        'msgpack',
+                        'seaborn'
                         ]
     )
