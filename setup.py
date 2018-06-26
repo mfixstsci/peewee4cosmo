@@ -37,11 +37,10 @@ setup(
                         'matplotlib',
                         'scipy',
                         'psutil',
-                        'networkx',
                         'fitsio',
-                        'msgpack',
                         'seaborn',
                         'bokeh',
-                        'flask'
+                        'flask',
+                        'wtforms'
                         ]
     )
