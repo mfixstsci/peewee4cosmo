@@ -255,7 +255,7 @@ def populate_files(settings):
     # pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=settings['num_cpu'])
 
-    if len(files_to_add) > 10000:
+    if len(files_to_add) > 1000:
         step = 100
     else:
         step = 1
@@ -264,7 +264,7 @@ def populate_files(settings):
         logger.info('INSERTING {} TO {} OUT OF {} TOTAL'.format(idx, idx+step, len(files_to_add)))
 
         data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
-        bulk_insert(Files, itertools.chain(*data_to_insert), debug=True)
+        bulk_insert(Files, itertools.chain(*data_to_insert))
 
 
 def populate_tables(table, table_keys, search_str, num_cpu=2):
@@ -470,7 +470,7 @@ def populate_stims(num_cpu=2):
         data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
         
         if len(data_to_insert):
-            bulk_insert(Stims, itertools.chain(*data_to_insert), debug=True)
+            bulk_insert(Stims, itertools.chain(*data_to_insert))
 
 
 def populate_gain(num_cpu=2):
@@ -602,7 +602,6 @@ def populate_hv_level(num_cpu):
     None
     """
     
-    settings = get_settings()
     database = get_database()
     database.connect()
 
@@ -675,8 +674,8 @@ def ingest_all():
     
     # Close DB connection.
     database.close()
-    
-    # Files
+
+    Files
     logger.info("INGESTING FILES FROM: {}".format(settings['data_location']))
     populate_files(settings)
 
@@ -726,21 +725,21 @@ def ingest_all():
     # Populate Stim monitor
     logger.info("POPULATING STIM TABLE")
     populate_stims(settings['num_cpu'])
-    
+
     # Populate gain monitor
     logger.info("POPULATING GAIN TABLE")
     populate_gain(settings['num_cpu'])
-    
+
     # Populate flagged pixels table.
     logger.info("POPULATING FLAGGED PIXEL TABLE")
     find_flagged()
-    
+
     # Work in progress, big bottleneck
     # Populate flagged pixels table.
     # if date.today().weekday() == 0:
     #     logger.info("POPULATING GAIN TRENDS TABLE")
     #     time_trends()
-    
+
     logger.info("POPULATING HV LEVEL TABLE")
     populate_hv_level(settings['num_cpu'])
 

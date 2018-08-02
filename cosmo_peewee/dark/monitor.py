@@ -198,6 +198,8 @@ def pull_orbital_info(data_object, step=25):
         timeline = hdu['timeline'].data
         segment = hdu[0].header['segment']
     except KeyError:
+        time = Time(hdu[1].header['EXPSTART'], format='mjd')
+        print('No Timeline! FILE {}, TIME {}'.format(info['filename'], time.iso))
         info['detector'] = hdu[0].header['segment']
         info['rootname'] = hdu[0].header['rootname']
         info['targname'] = hdu[0].header['targname']
@@ -257,6 +259,7 @@ def pull_orbital_info(data_object, step=25):
 
     # Make sure that the exposure actually happened.
     if not len(times):
+        print('EMPTY TIME ARRAY')
         logger.debug("TIME ARRAY EMPTY FOR: {}".format(full_path))
         blank = np.array([0])
         yield info
@@ -298,6 +301,7 @@ def pull_orbital_info(data_object, step=25):
 
     # Yield results for each time step that get added to DB.
     if not len(counts):
+        print('NO COUNTS')
         logger.debug("ZERO-LENGTH ARRAY FOUND FOR: {}".format(full_path))
         yield info
     else:
