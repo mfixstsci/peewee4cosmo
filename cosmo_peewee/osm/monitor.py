@@ -113,9 +113,20 @@ def pull_flashes(filename):
             fpoffset = out_info['fppos'] - 3
 
             for i, line in enumerate(hdu[1].data):
+                # To ensure we are properly counting the num flashes,
+                # we need to make sure that we are counting based off
+                # off the number of stripes or segments determined by the
+                # detector type.
+                if out_info['detector'] == 'NUV':
+                    segments = 3
+                elif out_info['detector'] == 'FUV':
+                    segments = 2
+                else:
+                    print('WHAT IS THIS? {}'.format(out_info['detector']))
+                
                 # 'flash' counts the number of flashes in a lampflash
                 # x_shift (dispersion axis) if the calculated shift for the monitor.
-                out_info['flash'] = (i // 2) + 1
+                out_info['flash'] = (i // segments) + 1
                 out_info['x_shift'] = line['SHIFT_DISP'] \
                                       - fppos_shift(out_info['lamptab'],
                                                     line['segment'],
@@ -1739,8 +1750,11 @@ def monitor():
     flash_data = make_shift_table(Lampflash)
     rawacq_data = make_shift_table(Rawacqs)
     
-    # ascii.write(flash_data, os.path.join(monitor_dir,'monitor_db_table.csv'),
-    #             format='csv', overwrite=True)
+    ascii.write(flash_data, 
+                os.path.join(monitor_dir,
+                    'monitor_db_table_{}.csv'.format(datetime.today()\
+                                                        .strftime('%Y-%m-%d'))),
+                format='csv', overwrite=True)
 
     # Make static plots.
     make_plots(flash_data, rawacq_data, monitor_dir)
