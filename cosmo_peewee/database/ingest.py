@@ -739,8 +739,8 @@ def ingest_all():
     logger.info("POPULATING FLAGGED PIXEL TABLE")
     find_flagged()
 
-    Work in progress, big bottleneck
-    Populate flagged pixels table.
+    # Work in progress, big bottleneck
+    # Populate flagged pixels table.
     if date.today().weekday() == 0:
         logger.info("POPULATING GAIN TRENDS TABLE")
         time_trends()
