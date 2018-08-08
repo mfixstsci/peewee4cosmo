@@ -114,7 +114,7 @@ def main(out_dir, hotspot_filter=True):
         if os.path.exists(dst_path):
             os.remove(dst_path)
             shutil.copyfile(figure, dst_path)
-            os.chmod(dst_path, 0o766)
+            os.chmod(dst_path, 0o776)
     
     # HV Level doest matter when total=True.    
     logger.info("MAKING TOTAL GAINMAP")

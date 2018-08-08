@@ -113,9 +113,20 @@ def pull_flashes(filename):
             fpoffset = out_info['fppos'] - 3
 
             for i, line in enumerate(hdu[1].data):
+                # To ensure we are properly counting the num flashes,
+                # we need to make sure that we are counting based off
+                # off the number of stripes or segments determined by the
+                # detector type.
+                if out_info['detector'] == 'NUV':
+                    segments = 3
+                elif out_info['detector'] == 'FUV':
+                    segments = 2
+                else:
+                    print('WHAT IS THIS? {}'.format(out_info['detector']))
+
                 # 'flash' counts the number of flashes in a lampflash
                 # x_shift (dispersion axis) if the calculated shift for the monitor.
-                out_info['flash'] = (i // 2) + 1
+                out_info['flash'] = (i // segments) + 1
                 out_info['x_shift'] = line['SHIFT_DISP'] \
                                       - fppos_shift(out_info['lamptab'],
                                                     line['segment'],
@@ -373,6 +384,7 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         # Plot FUV Shifts
         outname = os.path.join(out_dir, 'FUV_shift_vs_time.html')
         remove_if_there(outname)
+        os.chmod(outname, 0o776)
         output_file(outname)
         
         # Set panel size
@@ -487,6 +499,7 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         # Set outname and create file.
         outname = os.path.join(out_dir, 'NUV_shift_vs_time.html')
         remove_if_there(outname)
+        os.chmod(outname, 0o776)
         output_file(outname)
         
         # G230L search range was updated earlier than the other observing modes.
@@ -844,7 +857,7 @@ def make_plots(data, data_acqs, out_dir):
     remove_if_there(os.path.join(out_dir,'FUV_new_ds_shifts.png'))
     fig.savefig(os.path.join(out_dir,'FUV_new_ds_shifts.png'))
     plt.close(fig)
-    os.chmod(os.path.join(out_dir,'FUV_new_ds_shifts.png'),0o766)
+    os.chmod(os.path.join(out_dir,'FUV_new_ds_shifts.png'),0o776)
 
     # Make table for current reference file
     wcptab = fits.getdata(os.path.join(settings['lref'], 
@@ -1058,7 +1071,7 @@ def make_plots(data, data_acqs, out_dir):
                 bbox_inches='tight',
                 pad_inches=.5)
     plt.close(fig)
-    os.chmod(os.path.join(out_dir, 'NUV_new_ds_shifts.png'),0o766)
+    os.chmod(os.path.join(out_dir, 'NUV_new_ds_shifts.png'),0o776)
 
     ##############
 
@@ -1081,7 +1094,7 @@ def make_plots(data, data_acqs, out_dir):
                                  '{}_shifts.png'.format(elem.upper())))
         plt.close(fig)
         os.chmod((os.path.join(out_dir, 
-                               '{}_shifts.png'.format(elem.upper()))),0o766)
+                               '{}_shifts.png'.format(elem.upper()))),0o776)
 
     for grating in list(set(data['opt_elem'])):
         fig = plt.figure()
@@ -1124,7 +1137,7 @@ def make_plots(data, data_acqs, out_dir):
                     (grating)))
         plt.close(fig)
         os.chmod(os.path.join(out_dir, '%s_shifts_color.pdf' %
-                    (grating)), 0o766)
+                    (grating)), 0o776)
 
 
 def plot(axrow, detector, cenwave, fuva_data=None, fuvb_data=None, nuva_data=None, nuvb_data=None, nuvc_data=None):
@@ -1269,7 +1282,7 @@ def make_plots_per_fppos(data, out_dir):
         remove_if_there(os.path.join(out_dir, filename))
         fig.savefig(os.path.join(out_dir, filename))
         plt.close(fig)
-        os.chmod(os.path.join(out_dir, filename), 0o766)
+        os.chmod(os.path.join(out_dir, filename), 0o776)
 
 def make_plots_per_cenwave(data, out_dir):
     """Plot shift vs time for different cenwaves.
@@ -1709,7 +1722,7 @@ def fp_diff(data):
         remove_if_there(os.path.join(out_dir, 'difference_%s.pdf' % (cenwave)))
         plt.savefig(os.path.join(out_dir, 'difference_%s.pdf' % (cenwave)))
         plt.close()
-        os.chmod(os.path.join(out_dir, 'difference_%s.pdf' % (cenwave)), 0o766)
+        os.chmod(os.path.join(out_dir, 'difference_%s.pdf' % (cenwave)), 0o776)
 
 def monitor():
     """Run the entire suite of monitoring
@@ -1739,8 +1752,11 @@ def monitor():
     flash_data = make_shift_table(Lampflash)
     rawacq_data = make_shift_table(Rawacqs)
     
-    # ascii.write(flash_data, os.path.join(monitor_dir,'monitor_db_table.csv'),
-    #             format='csv', overwrite=True)
+    ascii.write(flash_data,
+                os.path.join(monitor_dir,
+                    'monitor_db_table_{}.csv'.format(datetime.today()\
+                                                        .strftime('%Y-%m-%d'))),
+                format='csv', overwrite=True)
 
     # Make static plots.
     make_plots(flash_data, rawacq_data, monitor_dir)
