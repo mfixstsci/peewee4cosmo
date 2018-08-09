@@ -362,9 +362,13 @@ def gsagtab_overplot_comparison(hv_lvl, compare=False, potential_gsagtab=None, c
                           blue_profiles[1].data[contour][blue_profile_FUVB], c=color)
 
 
-    # Save figure.
-    plt.savefig(os.path.join(settings['monitor_location'], 'CCI', 
-                             'gsagtab_comparisons', filename))
+    # Save figure, change permissions.
+    comparison_filename = os.path.join(settings['monitor_location'], 'CCI',
+                             'gsagtab_comparisons', filename)
+    remove_if_there(comparison_filename)
+    plt.savefig(comparison_filename)
+    os.chmod(comparison_filename, 0o776)
+
     # Close.
     plt.close()
 
@@ -440,6 +444,7 @@ def hotspot_plotter_interactive(segment):
 
         # Plotting config.
         output_file(filename)
+        os.chmod(filename, 0o776)
 
         # Set plot height & width.
         plt_hgt = 1000

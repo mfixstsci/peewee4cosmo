@@ -830,7 +830,7 @@ def make_plots(out_dir):
     plt.savefig(os.path.join(out_dir, 'STIM_locations.png'), 
                 bbox_inches='tight')
     plt.close(1)
-    os.chmod(os.path.join(out_dir, 'STIM_locations.png'),0o766)
+    os.chmod(os.path.join(out_dir, 'STIM_locations.png'), 0o776)
 
     plt.close()
 
@@ -887,7 +887,7 @@ def make_plots(out_dir):
             os.chmod(os.path.join(out_dir, 
                                   'STIM_locations_vs_time_%s.png' %
                                                                   (segment)),
-                                                                  0o766)
+                                                                  0o776)
         
         plt.close()
 
@@ -972,7 +972,7 @@ def make_plots(out_dir):
                                 (segment)))
 
         os.chmod(os.path.join(out_dir, 'STIM_stretch_vs_time_%s.png' %
-                    (segment)),0o766)
+                    (segment)),0o776)
         
         plt.close()
     

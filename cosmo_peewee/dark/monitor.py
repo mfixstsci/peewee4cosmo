@@ -612,7 +612,7 @@ def move_products(base_dir, web_dir):
                 path, file_to_move = os.path.split(item)
                 
                 # Update the permissions
-                os.chmod(item, 0o766)
+                os.chmod(item, 0o776)
 
                 # Remove the file if it exists in the webpage dir.
                 remove_if_there(write_dir + file_to_move)
