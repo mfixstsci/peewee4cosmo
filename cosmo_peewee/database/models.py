@@ -119,7 +119,32 @@ class Observations(BaseModel):
     extended = CharField()
     expstart = FloatField()
     expend = FloatField()
-  
+    opus_ver = CharField()
+    proctime = FloatField()
+    segment = CharField()
+    time_obs = CharField()
+    exptime = FloatField()
+    asn_mtyp = CharField()
+    asn_id = CharField()
+    rawacq = BooleanField()
+    rawtag = BooleanField() 
+    rawtag_a = BooleanField()
+    rawtag_b = BooleanField()
+    corrtag_a = BooleanField()
+    corrtag_b = BooleanField()
+    x1d_a = BooleanField()
+    x1d_b = BooleanField()
+    x1d = BooleanField()
+    csum_a = BooleanField()
+    csum_b = BooleanField()
+    flt = BooleanField()
+    flt_a = BooleanField()
+    flt_b = BooleanField()
+    counts = BooleanField()
+    counts_a = BooleanField()
+    counts_b = BooleanField()
+    spt = BooleanField()
+    
     class Meta:
         db_table = 'observations'  
 

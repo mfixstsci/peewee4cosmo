@@ -5,6 +5,7 @@ pull and return the meta data that is populat4ed in the headers.
 """
 
 import os
+import re
 
 from astropy.io import fits
 import gc
@@ -215,8 +216,49 @@ def obs_keys(file_result):
                     'opus_ver': hdu[0].header['opus_ver'],
                     'life_adj': hdu[0].header['life_adj'],
                     'expstart': hdu[1].header['expstart'],
-                    'expend': hdu[1].header['expend']
+                    'expend': hdu[1].header['expend'],
+                    'opus_ver': hdu[0].header['opus_ver'],
+                    'proctime': hdu[0].header['proctime'],
+                    'segment': hdu[0].header['segment'],
+                    'time_obs': hdu[1].header['time-obs'],
+                    'exptime': hdu[1].header['exptime'],
+                    'asn_mtyp': hdu[1].header.get('asn_mtyp',None),
+                    'asn_id':hdu[0].header.get('asn_id', None)
                     }
+
+        # Check for calibrated files types..
+        
+        ftypes = ['rawacq.fits',
+                  'rawtag.fits.gz',
+                  'rawtag_a.fits.gz',
+                  'rawtag_b.fits.gz',
+                  'corrtag_a.fits.gz',
+                  'corrtag_b.fits.gz',
+                  'x1d_a.fits.gz',
+                  'x1d_b.fits.gz',
+                  'x1d.fits.gz',
+                  'csum_a.fits.gz',
+                  'csum_b.fits.gz',
+                  'flt.fits.gz',
+                  'flt_a.fits.gz',
+                  'flt_b.fits.gz',
+                  'counts.fits.gz',
+                  'counts_a.fits.gz',
+                  'counts_b.fits.gz',
+                  'spt.fits.gz']
+        
+        for ftype in ftypes:
+            test_filename = ''.join([keywords['rootname'], '_', ftype])
+            test_file_path = os.path.join(file_result.path,
+                                          test_filename)
+            
+            split_key = re.split('[.]',ftype)[0]
+            
+            if os.path.exists(test_file_path):
+                keywords[split_key] = 1
+            else:
+                keywords[split_key] = 0
+    
     return keywords
 
 
