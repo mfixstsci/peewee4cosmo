@@ -9,6 +9,9 @@ import re
 
 from astropy.io import fits
 import gc
+from peewee import *
+
+from ..database.models import New_Files as Files
 
 def nuv_corr_keys(file_result):
     """Keys for COS NUV corrtags
@@ -227,7 +230,6 @@ def obs_keys(file_result):
                     }
 
         # Check for calibrated files types..
-        
         ftypes = ['rawacq.fits',
                   'rawtag.fits.gz',
                   'rawtag_a.fits.gz',
