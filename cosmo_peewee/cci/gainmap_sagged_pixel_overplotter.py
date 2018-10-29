@@ -367,7 +367,11 @@ def gsagtab_overplot_comparison(hv_lvl, compare=False, potential_gsagtab=None, c
                              'gsagtab_comparisons', filename)
     remove_if_there(comparison_filename)
     plt.savefig(comparison_filename)
-    os.chmod(comparison_filename, 0o776)
+    
+    try:
+        os.chmod(comparison_filename, 0o776)
+    except OSError:
+        logger.info("FILE {} DOESNT EXIST, CREATING".format(comparison_filename))
 
     # Close.
     plt.close()
@@ -444,7 +448,11 @@ def hotspot_plotter_interactive(segment):
 
         # Plotting config.
         output_file(filename)
-        os.chmod(filename, 0o776)
+        
+        try:
+            os.chmod(filename, 0o776)
+        except OSError:
+            logger.info("FILE {} DOESNT EXIST, CREATING".format(filename))
 
         # Set plot height & width.
         plt_hgt = 1000

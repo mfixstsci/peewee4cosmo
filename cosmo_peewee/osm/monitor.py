@@ -123,7 +123,7 @@ def pull_flashes(filename):
                     segments = 2
                 else:
                     print('WHAT IS THIS? {}'.format(out_info['detector']))
-
+                
                 # 'flash' counts the number of flashes in a lampflash
                 # x_shift (dispersion axis) if the calculated shift for the monitor.
                 out_info['flash'] = (i // segments) + 1
@@ -384,7 +384,12 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         # Plot FUV Shifts
         outname = os.path.join(out_dir, 'FUV_shift_vs_time.html')
         remove_if_there(outname)
-        os.chmod(outname, 0o776)
+        
+        try:
+            os.chmod(outname, 0o776)
+        except OSError:
+            logger.info("FILE {} DOESNT EXIST, CREATING".format(outname))
+        
         output_file(outname)
         
         # Set panel size
@@ -499,7 +504,12 @@ def make_interactive_plots(data, data_acqs, out_dir, detector):
         # Set outname and create file.
         outname = os.path.join(out_dir, 'NUV_shift_vs_time.html')
         remove_if_there(outname)
-        os.chmod(outname, 0o776)
+        
+        try:
+            os.chmod(outname, 0o776)
+        except OSError:
+            logger.info("FILE {} DOESNT EXIST, CREATING".format(outname))
+        
         output_file(outname)
         
         # G230L search range was updated earlier than the other observing modes.
@@ -1752,7 +1762,7 @@ def monitor():
     flash_data = make_shift_table(Lampflash)
     rawacq_data = make_shift_table(Rawacqs)
     
-    ascii.write(flash_data,
+    ascii.write(flash_data, 
                 os.path.join(monitor_dir,
                     'monitor_db_table_{}.csv'.format(datetime.today()\
                                                         .strftime('%Y-%m-%d'))),

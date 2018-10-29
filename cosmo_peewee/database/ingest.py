@@ -499,18 +499,21 @@ def populate_gain(num_cpu=2):
                                     Gain.select(Gain.filename)) 
                                 & Files.monitor_flag == True))
 
+    for item in list(files_to_add):
+        print(item.path, item.filename)
+        
     database.close()
     
     partial = functools.partial(pull_data,
                                 function=write_and_pull_gainmap)
     pool = mp.Pool(processes=num_cpu)
 
-    step=10
-    for idx in range(0, len(list(files_to_add)), step):
-        data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
+    # step=10
+    # for idx in range(0, len(list(files_to_add)), step):
+    #     data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
 
-        if len(data_to_insert):
-            bulk_insert(Gain, itertools.chain(*data_to_insert))
+    #     if len(data_to_insert):
+    #         bulk_insert(Gain, itertools.chain(*data_to_insert))
 
 
 def find_flagged():
@@ -636,6 +639,7 @@ def ingest_all():
     
     # Get settings for functions
     settings = get_settings()
+    print(settings)
     
     # Open DB connection.
     database = get_database()
@@ -646,6 +650,7 @@ def ingest_all():
     # opposed to dropping the table every time... This is the way
     # Justin did it and maybe a new implimentation can be applied
     # in the future.... 
+    
     if Gain_Trends.table_exists():
         if date.today().weekday() == 0:
             logger.info('DROPPING GAIN TREND TABLE')
@@ -736,9 +741,9 @@ def ingest_all():
 
     # Work in progress, big bottleneck
     # Populate flagged pixels table.
-    # if date.today().weekday() == 0:
-    #     logger.info("POPULATING GAIN TRENDS TABLE")
-    #     time_trends()
+    if date.today().weekday() == 0:
+        logger.info("POPULATING GAIN TRENDS TABLE")
+        time_trends()
 
     logger.info("POPULATING HV LEVEL TABLE")
     populate_hv_level(settings['num_cpu'])
