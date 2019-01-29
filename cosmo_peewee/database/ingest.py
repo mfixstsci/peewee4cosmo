@@ -508,12 +508,12 @@ def populate_gain(num_cpu=2):
                                 function=write_and_pull_gainmap)
     pool = mp.Pool(processes=num_cpu)
 
-    # step=10
-    # for idx in range(0, len(list(files_to_add)), step):
-    #     data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
+    step=10
+    for idx in range(0, len(list(files_to_add)), step):
+         data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
 
-    #     if len(data_to_insert):
-    #         bulk_insert(Gain, itertools.chain(*data_to_insert))
+         if len(data_to_insert):
+            bulk_insert(Gain, itertools.chain(*data_to_insert))
 
 
 def find_flagged():
