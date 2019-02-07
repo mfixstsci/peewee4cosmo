@@ -501,6 +501,8 @@ def populate_gain(num_cpu=2):
     if files_to_add:
         print("Gain files list is non-zero")
         print("Number of gain files is ", len(files_to_add))
+        print("Truncating gain files to add to first ten")
+        files_to_add = files_to_add[0:10]  # get rid of this line when it is time to ingest all gain files
 
     for item in list(files_to_add):
         print(item.path, item.filename)
