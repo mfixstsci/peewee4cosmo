@@ -85,11 +85,11 @@ def bulk_insert(table, data_source, debug=False):
             except IntegrityError as e:
                 logger.warning('INTEGRITY ERROR: {}'.format(e))
                 logger.warning(
-                    'FILE: {} FAILED INSERTION'\
-                    .format(item['filename']))
+                    'FILE: {} FAILED INSERTION' \
+                        .format(item['filename']))
                 print(item)
         database.close()
-    
+
     # Bulk inserts.
     else:
         try:
@@ -134,7 +134,7 @@ def pull_data(file_result, function):
         elif isinstance(data, types.GeneratorType):
             data = list(data)
         return data
-    
+
     except IOError as e:
         logger.warning('IO ERROR: {}'.format(e))
 
@@ -159,12 +159,12 @@ def bulk_delete(all_files):
     """
 
     # Combine tuples of path and filenames to check for existance....
-    combined_paths = [os.path.join(path, filename) 
+    combined_paths = [os.path.join(path, filename)
                       for (path, filename) in all_files]
 
     # Not the prettiest thing in the whole world....
-    files_to_remove = [os.path.basename(full_path) 
-                       for full_path in combined_paths 
+    files_to_remove = [os.path.basename(full_path)
+                       for full_path in combined_paths
                        if not os.path.exists(full_path)]
     logger.info('FOUND {} FILES TO DELETE!'.format(len(files_to_remove)))
 
@@ -177,7 +177,7 @@ def bulk_delete(all_files):
     # files in DB are ingested.    
     for f in files_to_remove:
         logger.info("DELETING INSTANCES OF {}".format(f))
-        
+
         Files.get(Files.filename == f).delete_instance()
         # Hack to use the rootname to delete.
         try:
@@ -185,7 +185,7 @@ def bulk_delete(all_files):
         except DoesNotExist:
             continue
 
-    database.close()      
+    database.close()
 
 
 def setup_logging():
@@ -200,7 +200,7 @@ def setup_logging():
     None
 
     """
-    
+
     # create the logging file handler
     logging.basicConfig(filename="cosmos_monitors.log",
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -231,7 +231,7 @@ def populate_files(settings):
     database = get_database()
     database.connect()
 
-    previous_files = {(result.path, result.filename) 
+    previous_files = {(result.path, result.filename)
                       for result in Files.select(Files.path, Files.filename)}
 
     database.close()
@@ -240,18 +240,18 @@ def populate_files(settings):
     bulk_delete(previous_files)
 
     # Create a set of all the data sets in /smov/cos/Data/
-    smov_cos_data = set(find_all_datasets(settings['data_location'], 
+    smov_cos_data = set(find_all_datasets(settings['data_location'],
                                           settings['num_cpu']))
 
     # Turn the difference of the sets into a list to pass to bulk_insert
     files_to_add = list(smov_cos_data - previous_files)
-    
+
     logger.info('FOUND {} FILES TO ADD!'.format(len(files_to_add)))
 
     # set up partials
     partial = functools.partial(pull_data,
                                 function=file_keys)
-        
+
     # pool up the partials and pass it the iterable (files)
     pool = mp.Pool(processes=settings['num_cpu'])
 
@@ -261,9 +261,9 @@ def populate_files(settings):
         step = 1
 
     for idx in range(0, len(list(files_to_add)), step):
-        logger.info('INSERTING {} TO {} OUT OF {} TOTAL'.format(idx, idx+step, len(files_to_add)))
+        logger.info('INSERTING {} TO {} OUT OF {} TOTAL'.format(idx, idx + step, len(files_to_add)))
 
-        data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
+        data_to_insert = pool.map(partial, files_to_add[idx:idx + step])
         bulk_insert(Files, itertools.chain(*data_to_insert))
 
 
@@ -288,43 +288,43 @@ def populate_tables(table, table_keys, search_str, num_cpu=2):
 
     database = get_database()
     database.connect()
-    
+
     # Select files where the filename looks like %search_string% and filename 
     # is not in the table you wish to populate and that the monitoring flag is 
     # set to true so we know that it isnt corrupted.
-    
+
     # Because the FUV and NUV x1d files share the same naming scheme, we need 
     # to perform a join on the resepective table and make sure that we are only 
     # adding FUV or NUV exposures to their respective tables.
     if table._meta.db_table == 'fuv_x1d_headers':
         files_to_add = (Observations.select()
-                        .where(
-                            Observations.filename.contains(search_str) 
-                            & Observations.rootname.not_in(
-                                table.select(table.rootname))
-                            & (Observations.detector == 'FUV')))
+            .where(
+            Observations.filename.contains(search_str)
+            & Observations.rootname.not_in(
+                table.select(table.rootname))
+            & (Observations.detector == 'FUV')))
 
     # NUV x1d's... Maybe try to combine with the FUV by using a dictionary.
     elif table._meta.db_table == 'nuv_x1d_headers':
         files_to_add = (Files.select().where(
-                            Files.filename.contains(search_str) 
-                            & Files.rootname.not_in(
-                                table.select(table.rootname))
-                            & (Observations.detector == 'NUV')))
+            Files.filename.contains(search_str)
+            & Files.rootname.not_in(
+                table.select(table.rootname))
+            & (Observations.detector == 'NUV')))
     # Else, the tables should look like this
     else:
         files_to_add = (Files.select().where(
-                            Files.filename.contains(search_str)
-                            & Files.rootname.not_in(
-                                table.select(table.rootname))
-                            & Files.monitor_flag == True))
+            Files.filename.contains(search_str)
+            & Files.rootname.not_in(
+                table.select(table.rootname))
+            & Files.monitor_flag == True))
     database.close()
-    
+
     partial = functools.partial(pull_data,
-                                function=table_keys)    
+                                function=table_keys)
     pool = mp.Pool(processes=num_cpu)
     data_to_insert = pool.map(partial, files_to_add)
-    
+
     if len(data_to_insert):
         bulk_insert(table, itertools.chain(*data_to_insert))
 
@@ -342,23 +342,23 @@ def populate_osm(num_cpu=2):
     None
 
     """
-    
+
     database = get_database()
     database.connect()
 
     files_to_add = (Files.select().where(
-                                Files.filename.contains('%lampflash%.gz')
-                                & Files.filename.not_in(
-                                    Lampflash.select(Lampflash.filename))
-                                & Files.monitor_flag == True))
+        Files.filename.contains('%lampflash%.gz')
+        & Files.filename.not_in(
+            Lampflash.select(Lampflash.filename))
+        & Files.monitor_flag == True))
     database.close()
 
     partial = functools.partial(pull_data,
                                 function=pull_flashes)
-    
+
     pool = mp.Pool(processes=num_cpu)
     data_to_insert = pool.map(partial, files_to_add)
-    
+
     if len(data_to_insert):
         bulk_insert(Lampflash, itertools.chain(*data_to_insert))
 
@@ -376,24 +376,24 @@ def populate_acqs(num_cpu=2):
     None
 
     """
-    
+
     database = get_database()
     database.connect()
 
     files_to_add = (Files.select().where(
-                                Files.filename.contains('%rawacq%.gz')
-                                & Files.filename.not_in(
-                                    Rawacqs.select(Rawacqs.filename))
-                                & Files.monitor_flag == True))
-    
+        Files.filename.contains('%rawacq%.gz')
+        & Files.filename.not_in(
+            Rawacqs.select(Rawacqs.filename))
+        & Files.monitor_flag == True))
+
     database.close()
- 
+
     partial = functools.partial(pull_data,
                                 function=pull_flashes)
-    
+
     pool = mp.Pool(processes=num_cpu)
     data_to_insert = pool.map(partial, files_to_add)
-    
+
     if len(data_to_insert):
         bulk_insert(Rawacqs, itertools.chain(*data_to_insert))
 
@@ -410,27 +410,27 @@ def populate_darks(num_cpu=2):
     -------
     None
     """
-    
+
     database = get_database()
     database.connect()
 
     files_to_add = (Files.select().join(
-                        Observations, on=(
-                            Files.rootname == Observations.rootname))
-                            .where((Files.filename.contains('%corrtag%.gz')
-                                    & Files.filename.not_in(
-                                        Darks.select(Darks.filename))
-                                    & Files.monitor_flag == True)
-                                    & (Observations.targname == 'DARK')))
+        Observations, on=(
+                Files.rootname == Observations.rootname))
+                    .where((Files.filename.contains('%corrtag%.gz')
+                            & Files.filename.not_in(
+                Darks.select(Darks.filename))
+                            & Files.monitor_flag == True)
+                           & (Observations.targname == 'DARK')))
     database.close()
 
     partial = functools.partial(pull_data,
                                 function=pull_orbital_info)
-    
+
     pool = mp.Pool(processes=num_cpu)
     data_to_insert = pool.map(partial, files_to_add)
 
-    if len(data_to_insert): 
+    if len(data_to_insert):
         bulk_insert(Darks, itertools.chain(*data_to_insert))
 
 
@@ -447,28 +447,28 @@ def populate_stims(num_cpu=2):
     None
 
     """
-    
+
     database = get_database()
     database.connect()
 
     files_to_add = (Files.select().where(
-                                Files.filename.contains('%corrtag\_%.gz') 
-                                & Files.filename.not_in(
-                                    Stims.select(Stims.filename))
-                                & Files.monitor_flag == True))
+        Files.filename.contains('%corrtag\_%.gz')
+        & Files.filename.not_in(
+            Stims.select(Stims.filename))
+        & Files.monitor_flag == True))
     database.close()
-    
+
     partial = functools.partial(pull_data,
                                 function=locate_stims)
-    
+
     pool = mp.Pool(processes=num_cpu)
-    
+
     # Add 100 files at a time incase of time out we wont
     # lose all of the progress made
-    step=100
-    for idx in range(0, len(list(files_to_add)), step):    
-        data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
-        
+    step = 100
+    for idx in range(0, len(list(files_to_add)), step):
+        data_to_insert = pool.map(partial, files_to_add[idx:idx + step])
+
         if len(data_to_insert):
             bulk_insert(Stims, itertools.chain(*data_to_insert))
 
@@ -486,39 +486,43 @@ def populate_gain(num_cpu=2):
     None
 
     """
-    
+
     database = get_database()
     database.connect()
 
     files_to_add = (Files.select().where(
-                                (Files.filename.contains(
-                                    'l\_%\_00\____\_cci.fits.gz')
-                                | Files.filename.contains(
-                                    'l\_%\_01\____\_cci.fits.gz'))
-                                & Files.filename.not_in(
-                                    Gain.select(Gain.filename)) 
-                                & Files.monitor_flag == True))
+        (Files.filename.contains(
+            'l\_%\_00\____\_cci.fits.gz')
+         | Files.filename.contains(
+                    'l\_%\_01\____\_cci.fits.gz'))
+        & Files.filename.not_in(
+            Gain.select(Gain.filename))
+        & Files.monitor_flag == True))
+
     if files_to_add:
         print("Gain files list is non-zero")
         print("Number of gain files is ", len(files_to_add))
-        print("Truncating gain files to add to first ten")
+        print("Truncating gain files_to_add to just the first ten")
         files_to_add = files_to_add[0:10]  # get rid of this line when it is time to ingest all gain files
 
     for item in list(files_to_add):
-        print(item.path, item.filename)
-        
+        print("item path: ", item.path, "\n item filename: ", item.filename)
+        # added statements to see if the item.path and item.filename are both being printed
+
     database.close()
-    
+
     partial = functools.partial(pull_data,
                                 function=write_and_pull_gainmap)
     pool = mp.Pool(processes=num_cpu)
 
-    step=10
+    step = 10
     for idx in range(0, len(list(files_to_add)), step):
-         data_to_insert = pool.map(partial, files_to_add[idx:idx+step])
+        data_to_insert = pool.map(partial, files_to_add[idx:idx + step])
+        # print(data_to_insert) don't uncomment unless you want to spam your terminal with A LOT OF DATA
 
-         if len(data_to_insert):
-            bulk_insert(Gain, itertools.chain(*data_to_insert))
+        # integrity error is happening here
+        if len(data_to_insert):
+            bulk_insert(Gain, itertools.chain(*data_to_insert), debug=True)
 
 
 def find_flagged():
@@ -537,7 +541,7 @@ def find_flagged():
     -------
     None
     """
-    
+
     settings = get_settings()
     database = get_database()
     database.connect()
@@ -545,41 +549,41 @@ def find_flagged():
     # Nothing bad before 2010,
     # and there are some weird gainmaps back there
     # filtering out for now (expstart > 55197).
-    
+
     # Gain.y < 300 and Gain.y > 200 are counts in the spectral region.
     # Don't care about anything outside of that. 
     all_coords = (
         Gain.select().distinct().where(
-                        (Gain.gain <= 3)
-                      & (Gain.counts >= 30)
-                      & (Gain.expstart > 55197)
-                      & (Gain.y.between(400//Y_BINNING, 600//Y_BINNING))
-                      & (Gain.segment.in_(Gain.select(
-                                            Gain.segment).distinct()))
-                      & (Gain.hv_lvl.in_(Gain.select(
-                                            Gain.hv_lvl).distinct()))
-                      & (Gain.filename.not_in(Flagged_Pixels.select(
-                                    Flagged_Pixels.filename)))).dicts()
-                 )
+            (Gain.gain <= 3)
+            & (Gain.counts >= 30)
+            & (Gain.expstart > 55197)
+            & (Gain.y.between(400 // Y_BINNING, 600 // Y_BINNING))
+            & (Gain.segment.in_(Gain.select(
+                Gain.segment).distinct()))
+            & (Gain.hv_lvl.in_(Gain.select(
+                Gain.hv_lvl).distinct()))
+            & (Gain.filename.not_in(Flagged_Pixels.select(
+                Flagged_Pixels.filename)))).dicts()
+    )
     database.close()
 
     if len(all_coords):
         logger.info('{} NEW FLAGGED ENTRIES!'.format(len(all_coords)))
         # Set up collection dictionary.
         result = collections.defaultdict(list)
-        
+
         # for each x,y coodinate pair, create a dictionary where there 
         # key is the x,y pair that contains a list of dictionaries 
         # for all of the entries of that x,y pair.
         for d in all_coords:
             result[d['x'], d['y'], d['hv_lvl']].append(d)
-        
+
         # For each key in the dictionary, find the dictionary that has 
         # the date entry where the pixel first went bad.
         bad_pix = []
         for coord_pair in result.keys():
-            row_bad = min(result[coord_pair], key=lambda x:x['expstart'])
-            
+            row_bad = min(result[coord_pair], key=lambda x: x['expstart'])
+
             # Take meta and make dict according to fields in 
             # Flagged_Pixels and append to list.
             bad_dict = {'segment': row_bad['segment'],
@@ -589,7 +593,7 @@ def find_flagged():
                         'filename': row_bad['filename'],
                         'mjd_below_3': row_bad['expstart'],
                         'recovery': False}
-            
+
             bad_pix.append(bad_dict)
         bulk_insert(Flagged_Pixels, bad_pix)
     else:
@@ -609,22 +613,22 @@ def populate_hv_level(num_cpu):
     -------
     None
     """
-    
+
     database = get_database()
     database.connect()
 
     files_to_add = Files.select().where(Files.filename.contains('%rawtag\_%.gz')
                                         & Files.filename.not_in(
-                                            Hv_Level.select(Hv_Level.filename))
+        Hv_Level.select(Hv_Level.filename))
                                         & Files.monitor_flag == True)
 
     partial = functools.partial(pull_data,
                                 function=hv_keys)
-    
+
     pool = mp.Pool(processes=num_cpu)
     data_to_insert = pool.map(partial, files_to_add)
 
-    if len(data_to_insert): 
+    if len(data_to_insert):
         bulk_insert(Hv_Level, itertools.chain(*data_to_insert))
 
 
@@ -640,23 +644,23 @@ def ingest_all():
     None
 
     """
-    
+
     setup_logging()
-    
+
     # Get settings for functions
     settings = get_settings()
     print(settings)
-    
+
     # Open DB connection.
     database = get_database()
     database.connect()
-    
+
     # Since slopes change, we should drop and repopulate the table
     # It would probably be better if you could update the rows as
     # opposed to dropping the table every time... This is the way
     # Justin did it and maybe a new implimentation can be applied
     # in the future.... 
-    
+
     if Gain_Trends.table_exists():
         if date.today().weekday() == 0:
             logger.info('DROPPING GAIN TREND TABLE')
@@ -682,7 +686,7 @@ def ingest_all():
     # Safe checks existance of tables first to make sure they dont get 
     # clobbered.
     database.create_tables(tables, safe=True)
-    
+
     # Close DB connection.
     database.close()
 
@@ -771,7 +775,7 @@ def run_monitors():
 
     settings = get_settings()
     setup_logging()
-    
+
     osm_monitor()
     dark_monitor()
     stim_monitor()
