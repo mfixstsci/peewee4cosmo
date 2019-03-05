@@ -17,13 +17,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from astropy.io import fits
 
-
 # global variables
 OLD_GSAGTAB = "/user/cmagness/monitors/gainsag/23e16470l_gsag.fits"  # reference file date is 2018-03-13
 GAINMAP_DIR = "/user/cmagness/monitors/gainsag/gainmaps/"
 OUTDIR = "/user/cmagness/monitors/gainsag/"
 
 logger = logging.getLogger(__gsagtab__)
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -51,6 +51,7 @@ def files():
         gainmaps = []
 
     return gainmaps
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -111,6 +112,14 @@ def find_sag_dates(df_sagged, hdu_stack, ymin, ymax, xmin, xmax):
         df_sagged = df_sagged.drop(columns=["DATE_COMP"])
         logger.info("FOUND PIXELS SAGGED AT DATE OF {}".format(mjd))
     logger.info("FOUND DATES FOR ALL SAGGED PIXELS")
+    logger.info("ADDING DX, DY, DQ COLUMNS TO SAGGED PIXEL TABLE")
+
+    df_sagged["DX"] = 1
+    df_sagged["DY"] = 1
+    df_sagged["DQ"] = 8192
+    columns = ["DATE", "LX", "LY", "DX", "DY", "DQ"]
+    df_sagged = df_sagged[columns]
+    df_sagged = df_sagged.apply(pd.to_numeric)
 
     return df_sagged
 
@@ -152,17 +161,52 @@ def plot_gainsag_regions(df_sagged, ymin, ymax, xmin, xmax):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def update_gsag(full_pixel_table):
+def update_gsag_data(df_sagged):
     """This function should update the gsagtab with the newly sagged pixels and the date they were first sagged and
     create a new gsagtab in the OUTDIR."""
-    pass
+
+    # add conditional about whether segment is A or B -- HVLEVEL header keyword should be changed accordingly
+    logger.info("FINDING CORRECT EXTENSION OF THE OLD GSAGTAB TO UPDATE")
+    with fits.open(OLD_GSAGTAB) as f:
+
+        # i am aware this is not... the best. suggestions?
+        header_found = False
+        extension = 1
+        while not header_found:
+            header = f[extension].header
+            try:
+                if (header["SEGMENT"] == "FUVB") & (header["HVLEVELB"] == 163):
+                    logger.info("FOUND CORRECT EXTENSION")
+                    header_found = True
+            except:
+                pass
+            extension += 1
+        data = f[extension].data
+
+        date_col = fits.Column(name="DATE", format="D", unit="MJD", array=np.append(data["DATE"], df_sagged["DATE"]))
+        lx_col = fits.Column(name="LX", format="J", unit="pixel", array=np.append(data["LX"], df_sagged["LX"]))
+        ly_col = fits.Column(name="LY", format="J", unit="pixel", array=np.append(data["LY"], df_sagged["LY"]))
+        dx_col = fits.Column(name="DX", format="J", unit="pixel", array=np.append(data["DX"], df_sagged["DX"]))
+        dy_col = fits.Column(name="DY", format="J", unit="pixel", array=np.append(data["DY"], df_sagged["DY"]))
+        dq_col = fits.Column(name="DQ", format="J", array=np.append(data["DQ"], df_sagged["DQ"]))
+        cols = fits.ColDefs([date_col, lx_col, ly_col, dx_col, dy_col, dq_col])
+        bintable = fits.BinTableHDU.from_columns(cols)
+
+        f[extension].data = bintable.data
+        f.writeto(OUTDIR + "new_gsagtab.fits", overwrite=True)
+        logger.info("WROTE NEW GSAGTAB TO {}".format(OUTDIR + "new_gsagtab.fits"))
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def main():
+def update_gsag_header():
     pass
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def main():
     # collect all gainmaps at hv level and segment of interest
     gainmaps = files()
     # stack all binary map extensions of these gainmaps
@@ -173,11 +217,13 @@ def main():
     # compare this pixel list with each gainmap to find where it first appears, store date it first appears with pixel
     df_sagged_with_date = find_sag_dates(df_sagged, hdu_stack, 475, 503, 1029, 14957)
     plot_gainsag_regions(df_sagged_with_date)
-    # note for later: confirm that pixel is still sagged in the future and that it didn't show as sagged due to noise
-
     # add these pixels and date it first appears sagged to gsagtab. set dx and dy to 1
-    update_gsag(df_sagged_with_date)
+    update_gsag_data(df_sagged_with_date)
+
     # update history, do crds checks?
+    update_gsag_header()
+
+    # note for later: confirm that pixel is still sagged in the future and that it didn't show as sagged due to noise
 
     return 0
 
@@ -188,4 +234,3 @@ def main():
 if __name__ == "__main__":
     status = main()
     sys.exit(status)
-
