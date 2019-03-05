@@ -14,11 +14,12 @@ import logging
 import argparse
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from astropy.io import fits
 
 
 # global variables
-OLD_GSAGTAB = "/user/cmagness/monitors/gainsag/23e1646sl_gsag.fits"  # reference file date is 2018-03-13
+OLD_GSAGTAB = "/user/cmagness/monitors/gainsag/23e16470l_gsag.fits"  # reference file date is 2018-03-13
 GAINMAP_DIR = "/user/cmagness/monitors/gainsag/gainmaps/"
 OUTDIR = "/user/cmagness/monitors/gainsag/"
 
@@ -74,16 +75,17 @@ def stack_hdus(gainmaps):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def find_sagged_pixels(hdu_stack, ymin, ymax):
+def find_sagged_pixels(hdu_stack, ymin, ymax, xmin, xmax):
     """This function should find the sagged pixels from the most recent gainmap that are not in the gsagtab."""
-    logger.info("FINDING SAGGED PIXELS IN Y REGION {}, {}".format(ymin, ymax))
+    logger.info("FINDING SAGGED PIXELS IN X REGION {}, {} AND Y REGION {}, {}".format(xmin, xmax, ymin, ymax))
     # most recent gainmap, by mjd
     mr_mjd = sorted(hdu_stack)[-1]
-    search_region = hdu_stack[mr_mjd][ymin:ymax, :]
+    search_region = hdu_stack[mr_mjd][ymin:ymax, xmin:xmax]
     sagged_pixels = np.nonzero(search_region)
     xpix = sagged_pixels[1]
     ypix = sagged_pixels[0]
-    df_sagged = pd.DataFrame({"xpix": xpix, "ypix": ypix + ymin}) # need the absolute value of the y pixels
+    df_sagged = pd.DataFrame({"LX": xpix + xmin, "LY": ypix + ymin, "DATE": np.nan}, columns=["LX", "LY", "DATE"])
+    # need the absolute value of the x, y pixels
     logger.info("FOUND {} SAGGED PIXELS NOT IN GAINSAG TABLE".format(len(df_sagged)))
 
     return df_sagged
@@ -92,24 +94,59 @@ def find_sagged_pixels(hdu_stack, ymin, ymax):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def find_sag_dates(df_sagged, hdu_stack, ymin, ymax):
+def find_sag_dates(df_sagged, hdu_stack, ymin, ymax, xmin, xmax):
     """This function should use the sagged pixels and scan the gainmaps to determine the date the pixel first sagged."""
-    logger.info("FINDING DATES OF SAGGED PIXELS IN Y REGION {}, {}".format(ymin, ymax))
+    logger.info("FINDING DATES OF SAGGED PIXELS IN X REGION {}, {} AND Y REGION {}, {}".format(xmin, xmax, ymin, ymax))
 
     for mjd, gain_hdu in sorted(hdu_stack.items()):
-        search_region = gain_hdu[ymin: ymax, :]
+        search_region = gain_hdu[ymin: ymax, xmin:xmax]
         sagged_pixels = np.nonzero(search_region)
         xpix = sagged_pixels[1]
         ypix = sagged_pixels[0]
-        df_comp = pd.DataFrame({"xpix": xpix, "ypix": ypix + ymin, "mjd_comp": mjd})
-        df_sagged = pd.merge(df_sagged, df_comp, how="left", left_on=["xpix", "ypix"], right_on=["xpix", "ypix"])
-        mask = (df_sagged["mjd"].isna()) & (df_sagged["mjd_comp"].notnull())
-        df_sagged["mjd"].mask(mask, df_sagged["mjd_comp"], inplace=True)
-        df_sagged = df_sagged.drop(columns=["mjd_comp"])
+        df_comp = pd.DataFrame({"LX": xpix + xmin, "LY": ypix + ymin, "DATE_COMP": mjd}, columns=["LX", "LY",
+                                                                                                  "DATE_COMP"])
+        df_sagged = pd.merge(df_sagged, df_comp, how="left", left_on=["LX", "LY"], right_on=["LX", "LY"])
+        mask = (df_sagged["DATE"].isna()) & (df_sagged["DATE_COMP"].notnull())
+        df_sagged["DATE"].mask(mask, df_sagged["DATE_COMP"], inplace=True)
+        df_sagged = df_sagged.drop(columns=["DATE_COMP"])
         logger.info("FOUND PIXELS SAGGED AT DATE OF {}".format(mjd))
     logger.info("FOUND DATES FOR ALL SAGGED PIXELS")
 
     return df_sagged
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def plot_gainsag_regions(df_sagged, ymin, ymax, xmin, xmax):
+    """This function should plot the gainsagged regions found in the find_sagged_pixels and find_sag_dates functions."""
+    logger.info("PLOTTING FOUND SAGGED PIXELS")
+    fig, ax = plt.subplots(1, 1, figsize=(15, 5))
+    plt.title("Gainsag Regions in Gainmaps Missing in GSAGTAB")
+
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin - 5, ymax + 5)
+
+    major_ticks_x = np.arange(xmin, xmax, 1000)
+    major_ticks_y = np.arange(ymin, ymax, 5)
+    minor_ticks_x = np.arange(xmin, xmax, 100)
+    minor_ticks_y = np.arange(ymin, ymax, 1)
+
+    ax.set_xticks(major_ticks_x)
+    ax.set_xticks(minor_ticks_x, minor=True)
+    ax.set_yticks(major_ticks_y)
+    ax.set_yticks(minor_ticks_y, minor=True)
+
+    ax.grid(which="both")
+    ax.grid(which="major", linestyle="--", alpha=0.5)
+    ax.grid(which="minor", linestyle="--", alpha=0.2)
+
+    im = ax.scatter(df_sagged["LX"], df_sagged["LY"], s=1, c=df_sagged["DATE"], cmap="YlOrRd")
+    cbar = fig.colorbar(im)
+    cbar.set_label("DATE (MJD)")
+    plt.show()
+    logger.info("SAVING PLOT TO {}".format(OUTDIR + "gsag_regions.png"))
+    plt.savefig(OUTDIR + "gsag_regions.png")
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -131,15 +168,17 @@ def main():
     # stack all binary map extensions of these gainmaps
     hdu_stack = stack_hdus(gainmaps)
     # find pixels where holes exist in gainmap but not gsagtab & store coordinates
-    df_sagged = find_sagged_pixels(hdu_stack, 475, 503)
+    df_sagged = find_sagged_pixels(hdu_stack, 475, 503, 1029, 14957)
     # ^^ these numbers are the lp4 region, need to add logic for defining different lps
     # compare this pixel list with each gainmap to find where it first appears, store date it first appears with pixel
-    df_sagged_with_date = find_sag_dates(df_sagged, hdu_stack, 475, 503)
-
+    df_sagged_with_date = find_sag_dates(df_sagged, hdu_stack, 475, 503, 1029, 14957)
+    plot_gainsag_regions(df_sagged_with_date)
     # note for later: confirm that pixel is still sagged in the future and that it didn't show as sagged due to noise
 
     # add these pixels and date it first appears sagged to gsagtab. set dx and dy to 1
     update_gsag(df_sagged_with_date)
+    # update history, do crds checks?
+
     return 0
 
 
