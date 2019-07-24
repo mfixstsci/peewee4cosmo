@@ -8,7 +8,6 @@ from __future__ import print_function, division
 __author__ = "Camellia Magness"
 __email__ = "cmagness@stsci.edu"
 
-import os
 import sys
 import glob
 import logging
@@ -18,10 +17,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from datetime import datetime
-from shutil import copy
 
 # global variables
-OLD_GSAGTAB = "/user/cmagness/monitors/gainsag/23e16470l_gsag.fits"  # reference file date is 2018-03-13
+OLD_GSAGTAB = "/user/cmagness/monitors/gainsag/gsagtab_163.fits"  # reference file date is 2018-03-13
 GAINMAP_DIR = "/user/cmagness/monitors/gainsag/gainmaps/"
 OUTDIR = "/user/cmagness/monitors/gainsag/"
 
@@ -34,8 +32,8 @@ class Info:
 
     # add some support for optional flag (like blue mode?)
 
-    def __init__(self, hv_level, segment, v_calcos, lp, merger):
-        self.hv = hv_level
+    def __init__(self, hv_level, segment, v_calcos, lp, merger, history_off=False):
+        self.hv = int(hv_level)
         self.segment = segment
         self.calcos = v_calcos
         self.merger = merger
@@ -55,8 +53,27 @@ class Info:
         # there has to be a better way to store this because this just get updated by hand right now
         self.pedigree = 'INFLIGHT 06/08/2009 24/02/2019'
         self.descrip = 'Updated to add new gainsagged regions at LP4 for HV Level of 163'
-        self.history = ['--------------------- March 2019 --------------------------',
-                        'These new regions were derived by C. Magness and J. Roman-Duval.']
+        if not history_off:
+            self.history = ['---------------------  April 2019 --------------------------',
+                            'This GSAGTAB now contains updates to the gainsagged regions for HV 163',
+                            'and HV 167 on FUVB. These updates capture the new gainsag appearing at',
+                            'LP4 for this high voltage level. To determine the sagged regions,',
+                            'gainmaps were created from the date of the previous gsagtab delivery',
+                            'approximately a year previous to February 2019 at a cadence of two',
+                            'weeks. Binary maps of the gainsag were then created from these gainmaps',
+                            'and compared against the regions flagged in the previously delivered',
+                            'gsagtab.  From this comparison, all missing current regions were',
+                            'determined and appropriately dated with the original date of sag by',
+                            'cycling through the binary maps beginning with the last delivery. These',
+                            'regions were added only to the extensions for HV 163 FUVB and HV 167',
+                            'FUVB and only searched for between Y pixels corresponding to LP4,',
+                            '475-503. In the future, it will be necessary to update areas',
+                            'corresponding to LP3 at lower than current operating HV levels.',
+                            'These new regions were derived by C. Magness and J. Roman-Duval.']
+
+    @property
+    def hvlvl(self):
+        return 'HVLEVELA' if self.segment == 'FUVA' else 'HVLEVELB'
 
     # tbh i made this a method largely because i was like a class that just initializes stuff is kind of boring
     def add_gainmaps(self, gainmaps):
@@ -76,6 +93,7 @@ def files():
     parser.add_argument("segment", type=str, help="detector segment of gain to update")
     parser.add_argument("v_calcos", type=str, help="most recent version of calcos")
     parser.add_argument("lifetime_pos", type=int, help="LP to update, accepts 1-4")
+    parser.add_argument("--history_off", action="store_true", default=False, help="optional flag to not update history")
     parser.add_argument("--blue", action="store_true", default=False, help="optional flag for blue mode gsagtab")
     # ^ this doesn't do anything at the moment but whatever
 
@@ -83,16 +101,22 @@ def files():
 
     merger = input("Please enter your name (first initial and last, ie. C. Magness): ")
 
-    info = Info(args.hv_level, args.segment, args.v_calcos, args.lifetime_pos, merger)
+    if args.history_off:
+        info = Info(args.hv_level, args.segment, args.v_calcos, args.lifetime_pos, merger, history_off=True)
+    else:
+        info = Info(args.hv_level, args.segment, args.v_calcos, args.lifetime_pos, merger)
 
     all_gainmaps = glob.glob(GAINMAP_DIR + "*")
     if not args.blue:
         logging.info("COLLECTING GAINMAPS FOR HV LEVEL {} AND SEGMENT {}".format(args.hv_level, args.segment))
-        gainmaps = [gainmap for gainmap in all_gainmaps if args.hv_level in gainmap if args.segment in gainmap]
+        gainmaps = [gainmap for gainmap in all_gainmaps if args.hv_level in gainmap and args.segment in gainmap]
     else:
         logging.info("BLUE MODES NOT SUPPORTED YET")
         logging.warning("GAINMAPS LIST IS EMPTY")
         gainmaps = []
+
+    if not gainmaps:
+        logging.warning("GAINMAPS LIST IS EMPTY")
 
     info.add_gainmaps(gainmaps)
 
@@ -220,27 +244,20 @@ def update_gsag_data(df_sagged, info):
     # add conditional about whether segment is A or B -- HVLEVEL header keyword should be changed accordingly
     logging.info("FINDING CORRECT EXTENSION OF THE OLD GSAGTAB TO UPDATE")
 
-    duplicate = copy(OLD_GSAGTAB, "./duplicate.fits")
+    # duplicate = copy(OLD_GSAGTAB, "./duplicate.fits")
     # ^ this has to be done so that running this multiple times you aren't overwriting the original file. there's
     # definitely a better way to do this but this was a quick fix. duplicate is deleted later after file is written
 
-    with fits.open(duplicate) as f:
-
-        # i am aware this is not... the best. suggestions?
-        header_found = False
-        extension = 0
-        while not header_found:
-            header = f[extension].header
-            try:
-                if (header["SEGMENT"] == "FUVB") & (header["HVLEVELB"] == 163):
-                    logging.info("FOUND CORRECT EXTENSION")
-                    header_found = True
-                    break
-            except:
-                pass
-            extension += 1
-            # I KNOW THIS IS BAD
-        data = f[extension].data
+    extension = None
+    data = None
+    with fits.open(OLD_GSAGTAB) as f:
+        for ext in f[1:]:  # excluding primary extension
+            header = ext.header
+            if header['SEGMENT'] == info.segment and info.hvlvl in header and header[info.hvlvl] == info.hv:
+                logging.info("FOUND CORRECT EXTENSION")
+                extension = ext
+                data = extension.data
+                break
 
         date_col = fits.Column(name="DATE", format="D", unit="MJD", array=np.append(data["DATE"], df_sagged["DATE"]))
         lx_col = fits.Column(name="LX", format="J", unit="pixel", array=np.append(data["LX"], df_sagged["LX"]))
@@ -251,12 +268,12 @@ def update_gsag_data(df_sagged, info):
         cols = fits.ColDefs([date_col, lx_col, ly_col, dx_col, dy_col, dq_col])
         bintable = fits.BinTableHDU.from_columns(cols)
 
-        f[extension].data = bintable.data
-        bitpix = fits.getval(duplicate, 'BITPIX')
+        extension.data = bintable.data
+        bitpix = f["PRIMARY"].header["BITPIX"]
         # update header in place here before writing out the new file
         update_gsag_header(f["PRIMARY"], info, bitpix)
         f.writeto(OUTDIR + "new_gsagtab.fits", overwrite=True, checksum=True)
-        os.remove(duplicate) # BAD
+        # os.remove(duplicate)  # BAD
 
     logging.info("WROTE NEW GSAGTAB TO {}".format(OUTDIR + "new_gsagtab.fits"))
 
@@ -289,17 +306,19 @@ def update_gsag_header(hdu, info, bitpix):
 
     checked_descrip = descrip_keyword(info.descrip)
 
-    del hdu.header['COMMENT']
-    del hdu.header['FILENAME']
-
-    for entry in info.history:
-        hdu.header['HISTORY'] = entry
+    try:
+        for entry in info.history:
+            hdu.header['HISTORY'] = entry
+    except AttributeError:
+        pass
 
     try:
+        del hdu.header['FILENAME']
         del hdu.header['GIT_TAG']
     except KeyError:
-        # Some reference files don't include a GIT_TAG yet, but if the keyword
-        #   already exists it will place 2 in there which is unwanted.
+        # only delete FILENAME if it is there
+        # some reference files don't include a GIT_TAG yet, but if the keyword
+        # already exists it will place 2 in there which is unwanted.
         pass
 
     date_time = datetime.now().replace(microsecond=0).isoformat()
@@ -308,26 +327,31 @@ def update_gsag_header(hdu, info, bitpix):
     hdu.header.set('PEDIGREE', value=info.pedigree)
     hdu.header.set('BITPIX', value=bitpix)
     hdu.header['VCALCOS'] = info.calcos  # minimum version of calcos that can be run with this file
-    hdu.header.add_comment('Reference file created by {}'.format(info.merger), before="HISTORY")
+    hdu.header["COMMENT"][0] = "Reference file created by {}".format(info.merger)
 
     logging.info("GSAGTAB HEADER UPDATED")
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 def main():
-
     logging.basicConfig(filename='gsagtab.log', level=logging.DEBUG)
+
     # collect all gainmaps at hv level and segment of interest, make an object to hold that and relevant header info
     info = files()
+
     # stack all binary map extensions of these gainmaps
     hdu_stack = stack_hdus(info.gainmaps)
+
     # find pixels where holes exist in gainmap but not gsagtab & store coordinates
     df_sagged = find_sagged_pixels(hdu_stack, info.ymin, info.ymax, info.xmin, info.xmax)
     # ^^ these numbers are the lp4 region, need to add logic for defining different lps
+
     # compare this pixel list with each gainmap to find where it first appears, store date it first appears with pixel
     df_sagged_with_date = find_sag_dates(df_sagged, hdu_stack, info.ymin, info.ymax, info.xmin, info.xmax)
     plot_gainsag_regions(df_sagged_with_date, info.ymin, info.ymax, info.xmin, info.xmax)
+
     # add these pixels and date it first appears sagged to gsagtab. set dx and dy to 1
     # update header within this function and generate a new gsagtab
     update_gsag_data(df_sagged_with_date, info)
