@@ -94,7 +94,10 @@ def bulk_insert(table, data_source, debug=False):
     else:
         try:
             with database.atomic():
-                table.insert_many(data_source).execute()
+                try:
+                    table.insert_many(data_source).execute()
+                except TypeError as e:
+                    logger.warning('TYPE ERROR: {}'.format(e))
             database.close()
         # All of the exceptions to handle duplicate files in filesystem. 
         except IntegrityError as e:
@@ -695,55 +698,55 @@ def ingest_all():
     populate_files(settings)
 
     # Observation table
-    # logger.info("POPULATING OBSERVATION TABLE")
+    logger.info("POPULATING OBSERVATION TABLE")
     # if raw file types don't exist, then whats the point...?
-    # filetypes = ['%rawacq.fits.gz',
-    #             '%lampflash.fits.gz',
-    #             '%rawaccum.fits.gz',
-    #             '%rawtag.fits.gz',
-    #             '%rawtag_a.fits.gz',
-    #             '%rawtag_b.fits.gz']
-    # for file_type in filetypes:
-    #    populate_tables(Observations, obs_keys, file_type, settings['num_cpu'])
+    filetypes = ['%rawacq.fits.gz',
+                '%lampflash.fits.gz',
+                '%rawaccum.fits.gz',
+                '%rawtag.fits.gz',
+                '%rawtag_a.fits.gz',
+                '%rawtag_b.fits.gz']
+    for file_type in filetypes:
+       populate_tables(Observations, obs_keys, file_type, settings['num_cpu'])
 
-    # # NUV corrtag headers
-    # logger.info("POPULATING NUV CORRTAGS")
-    # populate_tables(NUV_corr_headers, nuv_corr_keys,
-    #                '%_corrtag.fits.gz%', settings['num_cpu'])
+    # NUV corrtag headers
+    logger.info("POPULATING NUV CORRTAGS")
+    populate_tables(NUV_corr_headers, nuv_corr_keys,
+                   '%_corrtag.fits.gz%', settings['num_cpu'])
 
     # FUV rawtag headers
-    # logger.info("POPULATING FUV RAWTAG HEADERS")
-    # populate_tables(FUVA_raw_headers, fuva_raw_keys,
-    #                 '%rawtag_a.fits.gz%', settings['num_cpu'])
-    # populate_tables(FUVB_raw_headers, fuvb_raw_keys,
-    #                 '%rawtag_b.fits.gz%', settings['num_cpu'])
+    logger.info("POPULATING FUV RAWTAG HEADERS")
+    populate_tables(FUVA_raw_headers, fuva_raw_keys,
+                    '%rawtag_a.fits.gz%', settings['num_cpu'])
+    populate_tables(FUVB_raw_headers, fuvb_raw_keys,
+                    '%rawtag_b.fits.gz%', settings['num_cpu'])
 
     # FUV corrtag headers
-    # logger.info("POPULATING FUV CORRTAGS")
-    # populate_tables(FUVA_corr_headers, fuva_corr_keys,
-    #                 '%corrtag_a.fits.gz%', settings['num_cpu'])
-    # populate_tables(FUVB_corr_headers, fuvb_corr_keys,
-    #                 '%corrtag_b.fits.gz%', settings['num_cpu'])
+    logger.info("POPULATING FUV CORRTAGS")
+    populate_tables(FUVA_corr_headers, fuva_corr_keys,
+                    '%corrtag_a.fits.gz%', settings['num_cpu'])
+    populate_tables(FUVB_corr_headers, fuvb_corr_keys,
+                    '%corrtag_b.fits.gz%', settings['num_cpu'])
 
     # Populate rawacq monitor meta
-    # logger.info("POPULATING RAW ACQS TABLE")
-    # populate_acqs(settings['num_cpu'])
+    logger.info("POPULATING RAW ACQS TABLE")
+    populate_acqs(settings['num_cpu'])
 
     # Populate OSM monitor metadata
-    # logger.info("POPULATING OSM DRIFT TABLE")
-    # populate_osm(settings['num_cpu'])
+    logger.info("POPULATING OSM DRIFT TABLE")
+    populate_osm(settings['num_cpu'])
 
     # Populate Darks monitor meta
-    # logger.info("POPULATING DARKS TABLE")
-    # populate_darks(settings['num_cpu'])
+    logger.info("POPULATING DARKS TABLE")
+    populate_darks(settings['num_cpu'])
 
     # Populate Stim monitor
-    # logger.info("POPULATING STIM TABLE")
-    # populate_stims(settings['num_cpu'])
+    logger.info("POPULATING STIM TABLE")
+    populate_stims(settings['num_cpu'])
 
     # Populate gain monitor
-    logger.info("POPULATING GAIN TABLE")
-    populate_gain(settings['num_cpu'])
+    # logger.info("POPULATING GAIN TABLE")
+    # populate_gain(settings['num_cpu'])
 
     # Populate flagged pixels table.
     # logger.info("POPULATING FLAGGED PIXEL TABLE")
@@ -755,8 +758,9 @@ def ingest_all():
     #     logger.info("POPULATING GAIN TRENDS TABLE")
     #     time_trends()
 
-    # logger.info("POPULATING HV LEVEL TABLE")
-    # populate_hv_level(settings['num_cpu'])
+    # Populate hv level
+    logger.info("POPULATING HV LEVEL TABLE")
+    populate_hv_level(settings['num_cpu'])
 
     logger.info("INGESTION COMPLETE")
 
