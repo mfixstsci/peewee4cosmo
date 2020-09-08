@@ -69,6 +69,9 @@ class CCI:
     def __init__(self, filename, **kwargs):
         """Open filename and create CCI Object"""
 
+        # Collect settings
+        self.settings = get_settings()
+
         # Assign full filename
         self.input_file = filename
 
@@ -272,8 +275,10 @@ class CCI:
             print('ERROR: name not standard')
 
         if os.path.exists(accum_name):
-            accum_data = rebin(fits.getdata(CCI_DIR+accum_name, 0),
-                               bins=(Y_BINNING,self.xbinning))
+            accum_path = os.path.join(self.settings["data_location"], "CCI",
+                                      accum_name)
+            accum_data = rebin(fits.getdata(accum_path, 0),
+                               bins=(Y_BINNING, self.xbinning))
             out_array += accum_data
             self.accum_data = accum_data
         else:
@@ -741,13 +746,33 @@ def write_and_pull_gainmap(cci_name, out_dir='None'):
     
     # Set full file_path from peewee object and run CCI class to obtain gainmap
     full_path = os.path.join(cci_name.path, cci_name.filename)
-    current = CCI(full_path, xbinning=X_BINNING, ybinning=Y_BINNING)
-    out_name = os.path.join(out_dir, 
-                            os.path.basename(full_path.replace('.fits.gz', 
-                                                               '_gainmap.fits.gz')))
+    out_name = os.path.join(out_dir, os.path.basename(
+        full_path.replace('.fits.gz', '_gainmap.fits.gz')))
 
-    logger.debug("WRITING GAINMAP TO: {}".format(out_name))
-    current.write(out_name)
+    current = CCI(full_path, xbinning=X_BINNING, ybinning=Y_BINNING)
+    try:
+        current.open_fits()
+    except:
+        logger.info("Unexpected Exception: {}".format(sys.exc_info()[0]))
+        logger.info("There is something with the CCI at {}. Can't open the "
+                    "file. Continuing onto the next file...".format(full_path))
+        return
+    # check current here and if a bad file, just return. i know this isn't
+    # ideal but it will avoid hiccups
+
+    logger.info("WRITING GAINMAP TO: {}".format(out_name))
+    try:
+        current.write(out_name)
+    except AssertionError as error:
+        logger.info(error)
+        logger.info("There is something wrong with the CCI at {}. "
+                    "Can't write the file. Continuing "
+                    "onto the next file...".format(full_path))
+        pass
+    # ^^ this might not be necessary after checking to see if current even
+    # successfully built, but it doesn't hurt. it will only make it here if
+    # current successfully built but there is something wrong with writing
+    # the file
 
     index = np.where(current.gain_image > 0)
 

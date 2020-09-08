@@ -237,6 +237,8 @@ def populate_files(settings):
     database.close()
 
     # Bulk delete files that arent in /smov/cos/Data....
+    # when smov_cos is referenced it really means the data origin, which is
+    # currently the cosmo data dir
     bulk_delete(previous_files)
 
     # Create a set of all the data sets in /smov/cos/Data/
@@ -502,8 +504,9 @@ def populate_gain(num_cpu=2):
     if files_to_add:
         print("Gain files list is non-zero")
         print("Number of gain files is ", len(files_to_add))
-        print("Truncating gain files_to_add to just the first ten")
-        files_to_add = files_to_add[0:10]  # get rid of this line when it is time to ingest all gain files
+        # only use the below for debugging
+        # print("Truncating gain files_to_add to just the first ten")
+        # files_to_add = files_to_add[0:10]  # get rid of this line when it is time to ingest all gain files
 
     for item in list(files_to_add):
         print("item path: ", item.path, "\n item filename: ", item.filename)
@@ -522,7 +525,9 @@ def populate_gain(num_cpu=2):
 
         # integrity error is happening here
         if len(data_to_insert):
-            bulk_insert(Gain, itertools.chain(*data_to_insert), debug=True)
+            # bulk_insert(Gain, itertools.chain(*data_to_insert), debug=True)
+            # turn off debug or you spam EVERYTHING
+            bulk_insert(Gain, itertools.chain(*data_to_insert))
 
 
 def find_flagged():
@@ -693,6 +698,7 @@ def ingest_all():
     # Files
     logger.info("INGESTING FILES FROM: {}".format(settings['data_location']))
     populate_files(settings)
+    # ^^ THIS SHOULD NOT BE COMMENTED OUT BUT TAKING TOO LONG FOR DEBUGGING
 
     # Observation table
     # logger.info("POPULATING OBSERVATION TABLE")
